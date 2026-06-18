@@ -1,0 +1,13 @@
+{
+  "name": "directory-tree",
+  "version": "1.1.0",
+  "description": "Generate and optimize a project's directory_tree.md by running a bundled, .gitignore-aware tree script and suggesting .gitignore improvements to keep the tree small.",
+  "author": {
+    "name": "Rob Sherman",
+    "email": "rsherman@velocityinteractive.com"
+  },
+  "homepage": "https://github.com/cfdude/cfdude-plugins",
+  "repository": "https://github.com/cfdude/cfdude-plugins",
+  "license": "MIT",
+  "keywords": ["directory-tree", "gitignore", "documentation", "project-structure"]
+}
