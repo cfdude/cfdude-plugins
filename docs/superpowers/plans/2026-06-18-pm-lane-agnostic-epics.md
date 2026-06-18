@@ -18,7 +18,7 @@
 - **Known lanes:** `openspec`, `superpowers`, `claude-code`, `decision`, `external`. Lane rank order (for sorting + count display): `openspec(0) · superpowers(1) · claude-code(2) · decision(3) · external(4)`, unknown lanes last (`9`).
 - **Single semver helper.** All version comparison goes through `cmpVer(a,b)` (numeric major.minor.patch). Never string `>`.
 - **Migrations mutate raw `state.epics`** (never `resolveEpics()` output) so derived fields are never persisted.
-- **Run tests with:** `node --test plugins/pm/scripts/` (from repo root).
+- **Run tests with:** `node --test plugins/pm/scripts/conductor.test.mjs` (from repo root).
 - **Commit per task** with a conventional-commit message.
 - **Docs + version bump are deferred to AFTER Gate 2** (implementation review). Tasks 1–11 are code+tests only; the real `plugin.json`/`marketplace.json` version stays `0.2.0` during implementation (version tests use fixtures, not the shipped file).
 
@@ -1237,7 +1237,7 @@ test("ACCEPTANCE: 30 lane-tagged epics, zero OpenSpec changes", () => {
 
 - [ ] **Step 2: Run the full suite**
 
-Run: `node --test plugins/pm/scripts/`
+Run: `node --test plugins/pm/scripts/conductor.test.mjs`
 Expected: PASS (all tasks' tests).
 
 - [ ] **Step 3: Commit**
@@ -1268,7 +1268,7 @@ findings before proceeding. Only then do the deferred documentation/version work
 - [ ] **Step 1: Bump versions** in `plugin.json` and the `pm` entry of `marketplace.json` to `0.3.0`.
 - [ ] **Step 2: Create `plugins/pm/CHANGELOG.md`** with a `0.3.0` entry documenting: lanes, precedence progress, `/pm:epic add`, plan import, bounded briefing, lane-aware detours, and the **upgrade path** ("existing repos: run `/pm:upgrade` after updating the plugin").
 - [ ] **Step 3: Reframe `README.md` + `skills/conductor/SKILL.md`** — epics are lane-agnostic (OpenSpec is one lane); document `lane`, `planPath`, `stories`, `/pm:epic`, `/pm:upgrade`.
-- [ ] **Step 4: Sanity-run** `node --test plugins/pm/scripts/` (still green) and `git grep -n "epics = proposals"` (expect no stale framing).
+- [ ] **Step 4: Sanity-run** `node --test plugins/pm/scripts/conductor.test.mjs` (still green) and `git grep -n "epics = proposals"` (expect no stale framing).
 - [ ] **Step 5: Commit**
 
 ```bash
