@@ -97,6 +97,14 @@ The existing checkbox regex is factored into `countCheckboxes(absPath) → {done
 reused by both the plan and tasks.md paths. `decision`/`external` lanes naturally fall to
 case 4 and render `—`.
 
+**Renderer update.** `bar()` (today returns only `"X/Y stories"` or `"no tasks.md"`) is
+replaced by a progress-aware formatter that takes `epicProgress`'s `{done,total,source,warn}`:
+- `warn` set → `⚠ <warn>` (e.g. dangling `planPath`)
+- `total > 0` → `<done>/<total> <unit>` (unit = `stories` for openspec/manual, `tasks` for plan)
+- else → `—`
+
+This is what lets non-OpenSpec lanes avoid the misleading `"no tasks.md"` string.
+
 ### 3. Blind-spot fix — render layer
 
 Define a single predicate:
@@ -125,22 +133,33 @@ undercuts the conductor's signature feature. Therefore the **brief** stays compa
 - Rules reminder (unchanged).
 - Upgrade nudge if `pmVersion` is stale (see §8).
 
-The **full, ungrouped-but-sorted** epic list lives only in `PROJECT.md` (not injected),
-with a Lane column, sorted by priority then lane.
+The **full epic list** lives only in `PROJECT.md` (not injected), with a Lane column,
+**sorted by priority rank then lane rank**. Lane rank is an explicit curated order (matching
+the count-summary line): `openspec(0) · superpowers(1) · claude-code(2) · decision(3) ·
+external(4)`, unknown lanes last. This `laneRank` tiebreak is applied in **both**
+`resolveEpics()`'s sort and the brief, so ordering is deterministic and assertable. ("Sorted
+by priority then lane" — there are no per-lane sub-headers; lane is a column/tag. See M2 in
+the original review: acceptance wording is "sorted," not "grouped.")
 
 ### 5. Lane taxonomy — full support vs. plain tags
 
 - **Fully wired (progress + render):** `openspec`, `superpowers`, `claude-code`.
-- **Plain tags (render `—`, neutral status, no progress/lifecycle):** `decision`, `external`.
-  We keep them valid so the backlog can be complete, but we do **not** build status/progress
-  machinery for them in 0.3.0. Revisit only if a real need appears.
+- **Plain tags (no progress, no special lifecycle):** `decision`, `external`. They render `—`
+  for progress and reuse the **same** status vocabulary as every other epic
+  (`untriaged|queued|active|paused|archived`) — we just don't build progress/lifecycle
+  machinery specific to them. We do **not** add new status values in 0.3.0.
+  - **They DO appear in NEXT UP** (and the Epics table) like any other epic — the backlog must
+    be complete; they simply show a `—` bar. The NEXT UP filter keys on `status`, not lane, so
+    no lane-specific exclusion is added.
 
 ### 6. `sync` imports both lanes (additive, collision-safe)
 
 - OpenSpec: `openspec/changes/*` → lane `openspec` (today).
 - **NEW:** `docs/superpowers/plans/*.md` → each becomes a lane `superpowers` epic:
   `id` = filename without `.md`, `planPath` = its repo-relative path, `title` = first `#`
-  heading if present else the id. Additive by id.
+  heading if present else the id. Additive by id. The plans dir **may not exist** (it doesn't
+  in cfdude-plugins today) — the scan mirrors `activeChangeIds()`'s try/catch and returns `[]`
+  when absent, so `sync`/`init` never fail on its absence.
 - **Collision safety:** ids are id-keyed in the `known` map. If a derived id already exists
   (e.g. an OpenSpec change `auth/` and a plan `auth.md`), `sync` **skips and warns** rather
   than overwriting. No silent merge.
@@ -152,6 +171,9 @@ with a Lane column, sorted by priority then lane.
   - Validates `--id` (`^[a-z0-9][a-z0-9._-]*$` — no spaces/slashes; ids land in links and the
     TSV detour log).
   - Validates `--lane` against the known set.
+  - `--status` defaults to `queued` (running `add-epic` with a priority is itself an act of
+    triage); `--priority` defaults to `P?`. Both overridable. Applies to every lane, including
+    `decision`/`external`.
   - Refuses a duplicate id (additive only). Re-renders on success.
 - New thin command file `plugins/pm/commands/epic.md` → surfaces as `/pm:epic`, documents
   `add` (room to grow `edit`/`rm` later). Follows the existing command-file pattern: parse
@@ -159,27 +181,49 @@ with a Lane column, sorted by priority then lane.
 
 ### 8. Version-aware upgrade subsystem
 
-**Stamp:** `init` and `upgrade` write `pmVersion` (the running plugin's release, read from
-`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json`, resolved relative to `conductor.mjs` as
-`../.claude-plugin/plugin.json`) into `state.json`. The existing numeric `version` stays the
-**schema** version; `pmVersion` is the **release** that last touched the repo. If the
-plugin.json can't be read, version features degrade gracefully (no nudge, no stamp change).
+**Resolving the running version (single definition).** The engine reads its own release from
+`plugin.json` resolved via **`CLAUDE_PLUGIN_ROOT` when that env var is set**, falling back to
+the path relative to `conductor.mjs` (`../.claude-plugin/plugin.json`) only when it is unset.
+Env-first is deliberate: it lets the test suite point at a fixture `plugin.json` with a
+different version (see Testing case 7) without editing the shipped file. If neither resolves
+or the file is unreadable, version features degrade gracefully (no nudge, no stamp change).
 
-**Detect (non-blocking):** `brief()` compares stamped `pmVersion` vs running version. If
-older, it prepends one line:
+**Semver comparison (single helper).** All version comparisons — both the detect/nudge and
+the migration gate — go through one `cmpVer(a, b)` helper that compares **numeric**
+`major.minor.patch` segments (so `0.10.0 > 0.9.0` is true). Plain string `>` is never used.
+A **missing/undefined** stamped `pmVersion` is treated as `"0.0.0"` (so every registered
+migration runs on a never-stamped, pre-0.3.0 repo — this is what makes the `personal-finance`
+upgrade actually apply).
+
+**Stamp:** `init` and `upgrade` write `pmVersion` (the running release) into `state.json`. The
+existing numeric `version` stays the **schema** version; `pmVersion` is the **release** that
+last touched the repo. (Three version concepts now exist: `version` = state schema int;
+`pmVersion` = release stamp; migration registry entries keyed by `release` — see below.)
+
+**Detect (non-blocking):** `brief()` uses `cmpVer(stamped ?? "0.0.0", running)`. If stamped is
+older, it prepends one line to the briefing:
 > ⚠ pm `<old>` → `<new>` since this repo was set up — run `/pm:upgrade` (CLAUDE.md rules and
 > epic schema may need refreshing).
 
-**`/pm:upgrade` (→ `conductor.mjs upgrade`):** runs every migration whose `version` is
-`> stamped`, in order; then **unconditionally** refreshes the CLAUDE.md rules block
-(`writeRules()`), re-renders `PROJECT.md`, and re-stamps `pmVersion`. Idempotent.
+This nudge re-appears on every SessionStart **and** every PreCompact until `/pm:upgrade` runs
+(`snapshot()` also builds the brief). That recurrence is intended — one non-blocking line, not
+a surprise.
 
-**Migration registry (the contract):** an ordered array of `{ version, note, apply(state) }`.
-- `0.3.0` entry: persist an explicit `lane: "openspec"` onto any epic lacking one (makes
-  state self-describing rather than relying solely on read-time defaults). Idempotent.
-- **Discipline (documented here + in CHANGELOG):** any future version that changes the
-  schema or the rules block MUST ship both a CHANGELOG entry **and** a migration registry
-  entry. This is what prevents drift from recurring.
+**`/pm:upgrade` (→ `conductor.mjs upgrade`):** runs every migration whose `release` is
+`cmpVer(release, stamped ?? "0.0.0") > 0`, in registry order; then **unconditionally**
+refreshes the CLAUDE.md rules block (`writeRules()`), re-renders `PROJECT.md`, and re-stamps
+`pmVersion` to the running release. Idempotent — a second run finds no migrations `> stamped`
+and just re-refreshes/re-stamps to the same values.
+
+**Migration registry (the contract):** an ordered array of `{ release, note, apply(state) }`.
+- `apply(state)` mutates the **raw** `state.epics` (never `resolveEpics()` output), so derived
+  fields like `present`/`progress` are never persisted into `state.json`.
+- `0.3.0` entry: persist an explicit `lane: "openspec"` onto any epic (including archived /
+  state-only ones) lacking one — making state self-describing rather than relying solely on
+  read-time defaults. Idempotent (skips epics that already have a `lane`).
+- **Discipline (documented here + in CHANGELOG):** any future release that changes the schema
+  or the rules block MUST ship both a CHANGELOG entry **and** a migration registry entry. This
+  is what prevents drift from recurring.
 
 ### 9. Detour path — close the same blind spot
 
@@ -225,14 +269,14 @@ Cases:
 7. **Upgrade:** stale `pmVersion` triggers the nudge; `/pm:upgrade` refreshes rules, stamps
    version, persists explicit lanes; idempotent on second run.
 8. **Acceptance (integration):** a temp repo with **zero** OpenSpec changes registers 30
-   lane-tagged epics via `add-epic`, shows them grouped by priority+lane in `/pm:status`,
+   lane-tagged epics via `add-epic`, shows them sorted by priority then lane (lane shown per epic) in `/pm:status`,
    marks one superpowers epic active, and renders its progress bar — without creating a
    single OpenSpec change.
 
 ## Acceptance criteria
 
 - A repo with zero OpenSpec changes but 30 backlog items can register all 30 as lane-tagged
-  epics, see them grouped by priority+lane, mark one active in a superpowers lane, and show
+  epics, see them sorted by priority then lane (lane shown per epic), mark one active in a superpowers lane, and show
   its progress — all without creating an OpenSpec change.
 - An existing v0.2.0 repo upgrades via `/pm:upgrade` with no data loss: rules refreshed,
   lanes stamped, `pmVersion` updated; second run is a no-op.
