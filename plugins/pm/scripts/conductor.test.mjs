@@ -348,6 +348,53 @@ test("rules block is lane-agnostic, not openspec-only", () => {
   assert.doesNotMatch(out, /becomes its own OpenSpec proposal/);
 });
 
+test("render is a no-op when content is unchanged (no timestamp churn)", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["render"], { cwd });
+  const first = fs.readFileSync(path.join(cwd, "PROJECT.md"), "utf8");
+  run(["render"], { cwd });
+  const second = fs.readFileSync(path.join(cwd, "PROJECT.md"), "utf8");
+  assert.equal(first, second); // byte-identical, including the Last rendered line
+});
+
+test("render rewrites with a fresh stamp when content changes", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["render"], { cwd });
+  const before = fs.readFileSync(path.join(cwd, "PROJECT.md"), "utf8");
+  const s = readState(cwd);
+  s.epics.push({ id: "x", title: "x", priority: "P1", status: "queued", role: "epic", lane: "claude-code", links: [] });
+  writeState(cwd, s);
+  run(["render"], { cwd });
+  const after = fs.readFileSync(path.join(cwd, "PROJECT.md"), "utf8");
+  assert.notEqual(before, after);
+  assert.match(after, /`x`/);
+});
+
+test("add-epic accepts --status planned", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  run(["add-epic", "--id", "road-1", "--title", "Road 1", "--lane", "openspec", "--status", "planned"], { cwd });
+  assert.equal(readState(cwd).epics.find(e => e.id === "road-1").status, "planned");
+});
+
+test("add-epic rejects an unknown --status", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  assert.ok(expectFail(() => run(["add-epic", "--id", "x", "--lane", "openspec", "--status", "bogus"], { cwd })));
+});
+
+test("add-epic rejects a valueless --id and writes nothing", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  assert.ok(expectFail(() => run(["add-epic", "--lane", "openspec", "--id"], { cwd })));
+  assert.equal(readState(cwd).epics.length, 0);
+});
+
+test("add-epic tolerates a valueless --link without crashing", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  run(["add-epic", "--id", "y", "--lane", "claude-code", "--link"], { cwd }); // must not throw
+  assert.deepEqual(readState(cwd).epics.find(e => e.id === "y").links, []);
+});
+
 test("ACCEPTANCE: 30 lane-tagged epics, zero OpenSpec changes", () => {
   const cwd = tmpRepo();
   run(["init"], { cwd });
@@ -382,4 +429,58 @@ test("ACCEPTANCE: 30 lane-tagged epics, zero OpenSpec changes", () => {
   assert.match(brief, /NOW: `/);
   assert.match(brief, /lanes: /);
   assert.match(brief, /\(\+\d+ more — see PROJECT\.md\)/);
+});
+
+test("planned openspec epic: not missing, not in NEXT UP, counted, in table", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "4c", title: "4c", priority: "P0", status: "planned", role: "epic", lane: "openspec", links: [] },
+  ]});
+  run(["render"], { cwd });
+  const md = projectMd(cwd);
+  assert.doesNotMatch(md, /no change on disk/);            // not flagged missing
+  assert.match(md, /`4c` \| openspec \| epic \| planned/); // shown in Epics table
+  const brief = parseBrief(cwd);
+  assert.doesNotMatch(brief, /NEXT UP/);                   // not actionable
+  assert.match(brief, /planned: 1 — see PROJECT\.md/);
+});
+
+test("planned epics do not inflate the brief lanes: rollup", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "q1", title: "q1", priority: "P1", status: "queued", role: "epic", lane: "superpowers", stories: [{ title: "a", done: false }], links: [] },
+    { id: "p1", title: "p1", priority: "P0", status: "planned", role: "epic", lane: "openspec", links: [] },
+  ]});
+  const brief = parseBrief(cwd);
+  assert.match(brief, /lanes: superpowers 1/);
+  assert.doesNotMatch(brief, /openspec 1/);  // planned openspec excluded from lanes rollup
+  assert.match(brief, /planned: 1/);
+});
+
+test("sync auto-transitions a planned openspec epic to untriaged once its change dir exists", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  run(["add-epic", "--id", "feat-z", "--lane", "openspec", "--priority", "P1", "--status", "planned"], { cwd });
+  assert.doesNotMatch(parseBrief(cwd), /`feat-z`/);  // planned → not in NEXT UP yet
+  fs.mkdirSync(path.join(cwd, "openspec", "changes", "feat-z"), { recursive: true });
+  fs.writeFileSync(path.join(cwd, "openspec", "changes", "feat-z", "tasks.md"), "- [ ] a\n");
+  run(["sync"], { cwd });
+  assert.equal(readState(cwd).epics.find(e => e.id === "feat-z").status, "untriaged");
+  assert.match(parseBrief(cwd), /`feat-z`/);         // now actionable
+});
+
+test("sync does not transition a non-openspec planned epic (lane guard)", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  run(["add-epic", "--id", "dual", "--lane", "claude-code", "--status", "planned"], { cwd });
+  fs.mkdirSync(path.join(cwd, "openspec", "changes", "dual"), { recursive: true });
+  run(["sync"], { cwd });
+  const e = readState(cwd).epics.find(x => x.id === "dual");
+  assert.equal(e.lane, "claude-code");
+  assert.equal(e.status, "planned");  // lane guard: not flipped despite a matching change dir
+});
+
+test("rules block mentions planned status and the roadmap on-ramp", () => {
+  const cwd = tmpRepo(); run(["init"], { cwd });
+  const out = run(["rules"], { cwd });
+  assert.match(out, /planned/);
+  assert.match(out, /roadmap/i);
 });

@@ -48,6 +48,7 @@ const CHANGES_DIR = path.join(ROOT, "openspec", "changes");
 const ARCHIVE_DIR = path.join(CHANGES_DIR, "archive");
 const PLANS_DIR = path.join(ROOT, "docs", "superpowers", "plans");
 const KNOWN_LANES = ["openspec", "superpowers", "claude-code", "decision", "external"];
+const KNOWN_STATUSES = ["untriaged", "queued", "active", "paused", "planned", "archived"];
 const LANE_RANK = { openspec: 0, superpowers: 1, "claude-code": 2, decision: 3, external: 4 };
 const laneRank = (l) => (l in LANE_RANK ? LANE_RANK[l] : 9);
 
@@ -214,7 +215,7 @@ function resolveEpics(state) {
 
 /** An openspec epic with no change on disk and not archived = genuinely missing its change. */
 function missing(e) {
-  return e.lane === "openspec" && !e.present && !isArchived(e.id);
+  return e.lane === "openspec" && !e.present && !isArchived(e.id) && e.status !== "planned";
 }
 
 function bar(p) {
@@ -263,6 +264,11 @@ function rulesBlock() {
     "   (\"paused X for Y\" / \"resumed X, reconciled vs Y\") so the relationship survives outside",
     "   this repo.",
     "5. **Keep `tasks.md` checkboxes truthful** — they are the source of truth for story progress.",
+    "6. **Roadmap as backlog** — work you intend to do but haven't proposed yet can be",
+    "   registered now with `/pm:epic add … --status planned` (any lane). Planned epics show",
+    "   as ordered backlog in `PROJECT.md` and a `planned: N` count in the briefing, without a",
+    "   \"no change on disk\" warning; `/pm:sync` flips an openspec planned epic to untriaged once",
+    "   its change is proposed. Have a roadmap doc? Read it in-session and load each item this way.",
     RULES_END,
     "",
   ].join("\n");
@@ -337,10 +343,16 @@ function buildBrief(state) {
     }
     if (queued.length > NEXT_CAP) L.push(`  (+${queued.length - NEXT_CAP} more — see PROJECT.md)`);
     const counts = {};
-    for (const e of epics) if (!missing(e)) counts[e.lane] = (counts[e.lane] || 0) + 1;
+    for (const e of epics) if (!missing(e) && e.status !== "planned") counts[e.lane] = (counts[e.lane] || 0) + 1;
     const ordered = KNOWN_LANES.filter(l => counts[l]).map(l => `${l} ${counts[l]}`);
     const unknown = Object.keys(counts).filter(l => !KNOWN_LANES.includes(l)).sort().map(l => `${l} ${counts[l]}`);
     L.push(`  lanes: ${[...ordered, ...unknown].join(" · ")}`);
+    L.push("");
+  }
+
+  const plannedCount = epics.filter(e => e.status === "planned").length;
+  if (plannedCount) {
+    L.push(`planned: ${plannedCount} — see PROJECT.md`);
     L.push("");
   }
 
@@ -435,7 +447,15 @@ function render() {
   md.push("```");
   md.push("");
 
-  fs.writeFileSync(PROJECT_MD, md.join("\n"));
+  const content = md.join("\n");
+  const STAMP_RE = /^> Last rendered: .*$/m;
+  let existing = "";
+  try { existing = fs.readFileSync(PROJECT_MD, "utf8"); } catch { /* no file yet */ }
+  if (existing && existing.replace(STAMP_RE, "") === content.replace(STAMP_RE, "")) {
+    process.stderr.write("conductor: PROJECT.md unchanged (skipped rewrite)\n");
+    return;
+  }
+  fs.writeFileSync(PROJECT_MD, content);
   process.stderr.write(`conductor: rendered ${PROJECT_MD}\n`);
 }
 
@@ -509,6 +529,13 @@ function commitNudge() {
 
 function sync(quiet = false) {
   const state = loadState();
+  const onDiskChanges = new Set(activeChangeIds());
+  for (const e of state.epics) {
+    if ((e.lane || "openspec") === "openspec" && e.status === "planned" && onDiskChanges.has(e.id)) {
+      e.status = "untriaged";
+      if (!quiet) process.stderr.write(`conductor: '${e.id}' proposed — planned → untriaged\n`);
+    }
+  }
   const known = new Set(state.epics.map(e => e.id));
   let added = 0;
   for (const id of activeChangeIds()) {
@@ -550,7 +577,7 @@ function parseFlags(argv) {
     const a = argv[i];
     if (!a.startsWith("--")) continue;
     const k = a.slice(2);
-    const v = (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) ? argv[++i] : "true";
+    const v = (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) ? argv[++i] : true;
     if (k === "link") (o.link || (o.link = [])).push(v);
     else o[k] = v;
   }
@@ -560,31 +587,37 @@ function parseFlags(argv) {
 function addEpic() {
   if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
   const f = parseFlags(process.argv.slice(3));
-  if (!f.id || !/^[a-z0-9][a-z0-9._-]*$/.test(f.id)) {
+  const str = (v) => (typeof v === "string" ? v : undefined); // valueless flags arrive as boolean true
+  const id = str(f.id);
+  if (!id || !/^[a-z0-9][a-z0-9._-]*$/.test(id)) {
     process.stderr.write("conductor: --id required, format ^[a-z0-9][a-z0-9._-]*$\n"); process.exit(1);
   }
-  const lane = f.lane;
-  if (!KNOWN_LANES.includes(lane)) {
+  const lane = str(f.lane);
+  if (!lane || !KNOWN_LANES.includes(lane)) {
     process.stderr.write(`conductor: --lane must be one of ${KNOWN_LANES.join("|")}\n`); process.exit(1);
   }
-  const state = loadState();
-  if (state.epics.some(e => e.id === f.id)) {
-    process.stderr.write(`conductor: epic '${f.id}' already exists\n`); process.exit(1);
+  const status = str(f.status) || "queued";
+  if (!KNOWN_STATUSES.includes(status)) {
+    process.stderr.write(`conductor: --status must be one of ${KNOWN_STATUSES.join("|")}\n`); process.exit(1);
   }
-  const links = (f.link || []).map(s => {
+  const state = loadState();
+  if (state.epics.some(e => e.id === id)) {
+    process.stderr.write(`conductor: epic '${id}' already exists\n`); process.exit(1);
+  }
+  const links = (f.link || []).filter(s => typeof s === "string").map(s => {
     const [type, epic, ...rest] = s.split(":");
     const reason = rest.join(":").trim();
     return reason ? { type, epic, reason } : { type, epic };
   });
   const epic = {
-    id: f.id, title: f.title || f.id, priority: f.priority || "P?",
-    status: f.status || "queued", role: "epic", lane, links, reconcileNeeded: false,
+    id, title: str(f.title) || id, priority: str(f.priority) || "P?",
+    status, role: "epic", lane, links, reconcileNeeded: false,
   };
-  if (f.plan) epic.planPath = f.plan;
+  if (str(f.plan)) epic.planPath = f.plan;
   state.epics.push(epic);
   saveState(state);
   render();
-  process.stderr.write(`conductor: added epic '${f.id}' (${lane})\n`);
+  process.stderr.write(`conductor: added epic '${id}' (${lane}, ${status})\n`);
 }
 
 // ---------- migrations ----------
