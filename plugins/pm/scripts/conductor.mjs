@@ -35,6 +35,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
 const ROOT = process.env.CLAUDE_PROJECT_DIR || process.cwd();
 const CONDUCTOR_DIR = path.join(ROOT, ".conductor");
@@ -45,6 +46,10 @@ const PROJECT_MD = path.join(ROOT, "PROJECT.md");
 const CLAUDE_MD = path.join(ROOT, "CLAUDE.md");
 const CHANGES_DIR = path.join(ROOT, "openspec", "changes");
 const ARCHIVE_DIR = path.join(CHANGES_DIR, "archive");
+const PLANS_DIR = path.join(ROOT, "docs", "superpowers", "plans");
+const KNOWN_LANES = ["openspec", "superpowers", "claude-code", "decision", "external"];
+const LANE_RANK = { openspec: 0, superpowers: 1, "claude-code": 2, decision: 3, external: 4 };
+const laneRank = (l) => (l in LANE_RANK ? LANE_RANK[l] : 9);
 
 const RULES_BEGIN = "<!-- BEGIN pm-conductor rules (managed by /pm:init — safe to delete this block) -->";
 const RULES_END = "<!-- END pm-conductor rules -->";
@@ -83,6 +88,31 @@ function saveState(state) {
   fs.writeFileSync(STATE_PATH, JSON.stringify(state, null, 2) + "\n");
 }
 
+/** The running plugin's release. Env-first so tests can point at a fixture plugin.json. */
+function pluginVersion() {
+  const root = process.env.CLAUDE_PLUGIN_ROOT
+    ? process.env.CLAUDE_PLUGIN_ROOT
+    : path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const pj = readJSON(path.join(root, ".claude-plugin", "plugin.json"), null);
+  return pj && pj.version ? String(pj.version) : null;
+}
+
+/** Numeric semver compare: <0 if a<b, 0 if equal, >0 if a>b. */
+function cmpVer(a, b) {
+  const pa = String(a).split(".").map(n => parseInt(n, 10) || 0);
+  const pb = String(b).split(".").map(n => parseInt(n, 10) || 0);
+  for (let i = 0; i < 3; i++) {
+    const d = (pa[i] || 0) - (pb[i] || 0);
+    if (d) return d;
+  }
+  return 0;
+}
+
+function stampVersion(state) {
+  const v = pluginVersion();
+  if (v) state.pmVersion = v;
+}
+
 function appendDetourLog(kind, epic, note) {
   fs.mkdirSync(CONDUCTOR_DIR, { recursive: true });
   const line = [new Date().toISOString(), gitShortSha(), kind, epic || "-", (note || "").replace(/\s+/g, " ").trim()].join("\t");
@@ -98,21 +128,59 @@ function activeChangeIds() {
   } catch { return []; }
 }
 
+function planFiles() {
+  try {
+    return fs.readdirSync(PLANS_DIR, { withFileTypes: true })
+      .filter(d => d.isFile() && d.name.endsWith(".md"))
+      .map(d => d.name);
+  } catch { return []; }
+}
+
+function firstHeading(absPath) {
+  try {
+    for (const line of fs.readFileSync(absPath, "utf8").split("\n")) {
+      const m = line.match(/^#\s+(.+)/);
+      if (m) return m[1].trim();
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function isArchived(id) {
   return fs.existsSync(path.join(ARCHIVE_DIR, id));
 }
 
-/** Count [ ] / [x] checkboxes in a change's tasks.md. Source of truth for stories. */
-function storyProgress(id) {
-  const f = path.join(CHANGES_DIR, id, "tasks.md");
-  let total = 0, done = 0;
+/** Count [ ] / [x] checkboxes in a markdown file. */
+function countCheckboxes(absPath) {
+  let total = 0, done = 0, exists = false;
   try {
-    for (const line of fs.readFileSync(f, "utf8").split("\n")) {
+    const txt = fs.readFileSync(absPath, "utf8");
+    exists = true;
+    for (const line of txt.split("\n")) {
       const m = line.match(/^\s*[-*]\s+\[([ xX])\]/);
       if (m) { total++; if (m[1].toLowerCase() === "x") done++; }
     }
-  } catch { /* no tasks.md yet */ }
-  return { done, total };
+  } catch { /* missing file */ }
+  return { done, total, exists };
+}
+
+/** Resolve an epic's progress by precedence: stories -> planPath -> openspec tasks.md -> none. */
+function epicProgress(epic) {
+  if (Array.isArray(epic.stories)) {
+    const total = epic.stories.length;
+    const done = epic.stories.filter(s => s && s.done).length;
+    return { done, total, source: "stories", warn: null };
+  }
+  if (epic.planPath) {
+    const c = countCheckboxes(path.join(ROOT, epic.planPath));
+    if (!c.exists) return { done: 0, total: 0, source: "plan", warn: "planPath missing" };
+    return { done: c.done, total: c.total, source: "plan", warn: null };
+  }
+  if ((epic.lane || "openspec") === "openspec") {
+    const c = countCheckboxes(path.join(CHANGES_DIR, epic.id, "tasks.md"));
+    return { done: c.done, total: c.total, source: "openspec", warn: null };
+  }
+  return { done: 0, total: 0, source: "none", warn: null };
 }
 
 /** Merge state metadata with what's actually on disk. */
@@ -126,21 +194,34 @@ function resolveEpics(state) {
       id, title: id, priority: "P?", status: "untriaged", role: "epic",
       links: [], reconcileNeeded: false,
     };
-    out.push({ ...meta, progress: storyProgress(id), present: true });
+    const lane = meta.lane || "openspec";
+    out.push({ ...meta, lane, progress: epicProgress({ ...meta, lane }), present: true });
   }
   for (const e of state.epics) {
     if (!onDisk.has(e.id)) {
-      out.push({ ...e, progress: storyProgress(e.id),
+      const lane = e.lane || "openspec";
+      out.push({ ...e, lane, progress: epicProgress({ ...e, lane }),
         status: isArchived(e.id) ? "archived" : e.status, present: false });
     }
   }
   const rank = { P0: 0, P1: 1, P2: 2, P3: 3, "P?": 9 };
-  out.sort((a, b) => (rank[a.priority] ?? 9) - (rank[b.priority] ?? 9));
+  out.sort((a, b) =>
+    ((rank[a.priority] ?? 9) - (rank[b.priority] ?? 9)) ||
+    (laneRank(a.lane) - laneRank(b.lane)) ||
+    a.id.localeCompare(b.id));
   return out;
 }
 
-function bar({ done, total }) {
-  return total ? `${done}/${total} stories` : "no tasks.md";
+/** An openspec epic with no change on disk and not archived = genuinely missing its change. */
+function missing(e) {
+  return e.lane === "openspec" && !e.present && !isArchived(e.id);
+}
+
+function bar(p) {
+  if (!p) return "—";
+  if (p.warn) return `⚠ ${p.warn}`;
+  if (p.total > 0) return `${p.done}/${p.total} ${p.source === "plan" ? "tasks" : "stories"}`;
+  return "—";
 }
 
 /** Is the project currently inside a detour? (active epic is a detour, or stack non-empty) */
@@ -161,16 +242,19 @@ function rulesBlock() {
     RULES_BEGIN,
     "## PM Conductor — operating rules",
     "",
-    "This repo is managed by the `pm` plugin. The conductor sits ABOVE OpenSpec (epics =",
-    "proposals; stories = `tasks.md` checkboxes) and Superpowers. Follow these rules:",
+    "This repo is managed by the `pm` plugin. The conductor sits ABOVE OpenSpec and Superpowers.",
+    "Epics are **lane-agnostic** (openspec | superpowers | claude-code | decision | external);",
+    "OpenSpec is one lane. Stories come from each epic's source (OpenSpec `tasks.md`, a Superpowers",
+    "plan, or a manual list). Follow these rules:",
     "",
     "1. **Detours** — when something blocks the active epic, CLASSIFY before fixing:",
     "   - *Minimal* (small, self-contained, no design ambiguity): fix → test → commit → push,",
     "     then run `/pm:detour --minimal \"<what>\"` so it is recorded in `.conductor/detours.log`.",
     "     Then resume.",
     "   - *Substantial* (own design / changes shared behavior / multi-step): run `/pm:detour`.",
-    "     It becomes its own OpenSpec proposal; PUSH the current epic onto the detour stack in",
-    "     `.conductor/state.json` with a concrete reason and `reconcileOnResume`.",
+    "     It becomes its own epic in the appropriate lane (OpenSpec proposal, Superpowers plan,",
+    "     etc.); PUSH the current epic onto the detour stack in `.conductor/state.json` with a",
+    "     concrete reason and `reconcileOnResume`.",
     "2. **State of record is `.conductor/state.json`.** After any change to epics, status,",
     "   priority, or the detour stack, re-render with `/pm:status`. Never hand-edit `PROJECT.md`.",
     "3. **Resuming after a detour** — use `/pm:resume`. If the popped frame had",
@@ -212,12 +296,19 @@ function buildBrief(state) {
   const byId = Object.fromEntries(epics.map(e => [e.id, e]));
   const L = [];
 
+  const running = pluginVersion();
+  const stamped = state.pmVersion || "0.0.0";
+  if (running && cmpVer(stamped, running) < 0) {
+    L.push(`⚠ pm ${stamped} → ${running} since this repo was set up — run \`/pm:upgrade\` (CLAUDE.md rules and epic schema may need refreshing).`);
+    L.push("");
+  }
+
   L.push("CONDUCTOR STATE — where we are and what's next");
   L.push("");
 
   const active = state.active && byId[state.active];
   if (active) {
-    L.push(`NOW: \`${active.id}\` (${active.role}, ${active.priority}) — ${bar(active.progress)}`);
+    L.push(`NOW: \`${active.id}\` (${active.lane}, ${active.role}, ${active.priority}) — ${bar(active.progress)}`);
     if (active.reconcileNeeded)
       L.push(`  ⚠ RECONCILE PENDING: re-validate this proposal before continuing (a detour touched shared code).`);
   } else {
@@ -237,10 +328,19 @@ function buildBrief(state) {
     L.push("");
   }
 
-  const queued = epics.filter(e => ["queued", "untriaged"].includes(e.status) && e.present);
+  const NEXT_CAP = 5;
+  const queued = epics.filter(e => ["queued", "untriaged"].includes(e.status) && !missing(e));
   if (queued.length) {
-    L.push("NEXT UP (by priority):");
-    for (const e of queued) L.push(`  • \`${e.id}\` (${e.priority}, ${e.status}) — ${bar(e.progress)}`);
+    L.push("NEXT UP (by priority, then lane):");
+    for (const e of queued.slice(0, NEXT_CAP)) {
+      L.push(`  • \`${e.id}\` (${e.priority}, ${e.lane}, ${e.status}) — ${bar(e.progress)}`);
+    }
+    if (queued.length > NEXT_CAP) L.push(`  (+${queued.length - NEXT_CAP} more — see PROJECT.md)`);
+    const counts = {};
+    for (const e of epics) if (!missing(e)) counts[e.lane] = (counts[e.lane] || 0) + 1;
+    const ordered = KNOWN_LANES.filter(l => counts[l]).map(l => `${l} ${counts[l]}`);
+    const unknown = Object.keys(counts).filter(l => !KNOWN_LANES.includes(l)).sort().map(l => `${l} ${counts[l]}`);
+    L.push(`  lanes: ${[...ordered, ...unknown].join(" · ")}`);
     L.push("");
   }
 
@@ -304,11 +404,12 @@ function render() {
 
   md.push("## Epics");
   md.push("");
-  md.push("| Priority | Epic (OpenSpec change) | Role | Status | Stories | Links |");
-  md.push("|----------|------------------------|------|--------|---------|-------|");
+  md.push("| Priority | Epic | Lane | Role | Status | Progress | Links |");
+  md.push("|----------|------|------|------|--------|----------|-------|");
   for (const e of epics) {
     const links = (e.links || []).map(l => `${l.type}→${l.epic}`).join("; ") || "-";
-    md.push(`| ${e.priority} | \`${e.id}\` | ${e.role} | ${e.status}${e.reconcileNeeded ? " ⚠" : ""} | ${bar(e.progress)} | ${links} |`);
+    const miss = missing(e) ? " ⚠ no change on disk" : "";
+    md.push(`| ${e.priority} | \`${e.id}\` | ${e.lane} | ${e.role} | ${e.status}${e.reconcileNeeded ? " ⚠" : ""}${miss} | ${bar(e.progress)} | ${links} |`);
   }
   md.push("");
 
@@ -347,8 +448,9 @@ function init() {
     saveState(defaultState());
     process.stderr.write("conductor: created .conductor/state.json\n");
   }
-  sync(true);        // pull in existing openspec changes as untriaged
-  writeRules();      // install/refresh the CLAUDE.md rules block
+  sync(true);                 // pull in existing openspec changes + plans
+  { const s = loadState(); stampVersion(s); saveState(s); }
+  writeRules();
   render();
   process.stderr.write(
     "conductor: initialized. Triage epics in .conductor/state.json " +
@@ -411,9 +513,20 @@ function sync(quiet = false) {
   let added = 0;
   for (const id of activeChangeIds()) {
     if (!known.has(id)) {
-      state.epics.push({ id, title: id, priority: "P?", status: "untriaged", role: "epic", links: [], reconcileNeeded: false });
-      added++;
+      state.epics.push({ id, title: id, priority: "P?", status: "untriaged", role: "epic", lane: "openspec", links: [], reconcileNeeded: false });
+      known.add(id); added++;
     }
+  }
+  for (const fname of planFiles()) {
+    const id = fname.replace(/\.md$/, "");
+    if (known.has(id)) {
+      if (!quiet) process.stderr.write(`conductor: sync skipped plan '${id}' — id already exists\n`);
+      continue;
+    }
+    const planPath = path.join("docs", "superpowers", "plans", fname);
+    const title = firstHeading(path.join(PLANS_DIR, fname)) || id;
+    state.epics.push({ id, title, priority: "P?", status: "untriaged", role: "epic", lane: "superpowers", planPath, links: [], reconcileNeeded: false });
+    known.add(id); added++;
   }
   saveState(state);
   if (!quiet) process.stderr.write(`conductor: synced (${added} new epic(s) added as untriaged)\n`);
@@ -429,6 +542,78 @@ function logDetour() {
   process.stderr.write("conductor: logged minimal detour\n");
 }
 
+// ---------- add-epic ----------
+
+function parseFlags(argv) {
+  const o = {};
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (!a.startsWith("--")) continue;
+    const k = a.slice(2);
+    const v = (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) ? argv[++i] : "true";
+    if (k === "link") (o.link || (o.link = [])).push(v);
+    else o[k] = v;
+  }
+  return o;
+}
+
+function addEpic() {
+  if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const f = parseFlags(process.argv.slice(3));
+  if (!f.id || !/^[a-z0-9][a-z0-9._-]*$/.test(f.id)) {
+    process.stderr.write("conductor: --id required, format ^[a-z0-9][a-z0-9._-]*$\n"); process.exit(1);
+  }
+  const lane = f.lane;
+  if (!KNOWN_LANES.includes(lane)) {
+    process.stderr.write(`conductor: --lane must be one of ${KNOWN_LANES.join("|")}\n`); process.exit(1);
+  }
+  const state = loadState();
+  if (state.epics.some(e => e.id === f.id)) {
+    process.stderr.write(`conductor: epic '${f.id}' already exists\n`); process.exit(1);
+  }
+  const links = (f.link || []).map(s => {
+    const [type, epic, ...rest] = s.split(":");
+    const reason = rest.join(":").trim();
+    return reason ? { type, epic, reason } : { type, epic };
+  });
+  const epic = {
+    id: f.id, title: f.title || f.id, priority: f.priority || "P?",
+    status: f.status || "queued", role: "epic", lane, links, reconcileNeeded: false,
+  };
+  if (f.plan) epic.planPath = f.plan;
+  state.epics.push(epic);
+  saveState(state);
+  render();
+  process.stderr.write(`conductor: added epic '${f.id}' (${lane})\n`);
+}
+
+// ---------- migrations ----------
+
+const MIGRATIONS = [
+  {
+    release: "0.3.0",
+    note: "stamp explicit lane on epics (lane-agnostic schema)",
+    apply(state) {
+      for (const e of state.epics) if (!e.lane) e.lane = "openspec";
+    },
+  },
+];
+
+function upgrade() {
+  if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const state = loadState();
+  const stamped = state.pmVersion || "0.0.0";
+  let applied = 0;
+  for (const m of MIGRATIONS) {
+    if (cmpVer(m.release, stamped) > 0) { m.apply(state); applied++; }
+  }
+  stampVersion(state);
+  saveState(state);
+  writeRules();
+  render();
+  process.stderr.write(`conductor: upgraded (${applied} migration(s)), pmVersion now ${state.pmVersion || "unknown"}\n`);
+}
+
 // ---------- dispatch ----------
 
 const cmd = process.argv[2];
@@ -440,9 +625,11 @@ const cmd = process.argv[2];
   "commit-nudge": commitNudge,
   sync: () => sync(false),
   "log-detour": logDetour,
+  "add-epic": addEpic,
+  upgrade,
   rules: () => process.stdout.write(rulesBlock()),
   "write-rules": writeRules,
 }[cmd] || (() => {
-  process.stderr.write("usage: conductor.mjs init|render|brief|snapshot|commit-nudge|sync|log-detour|rules|write-rules\n");
+  process.stderr.write("usage: conductor.mjs init|render|brief|snapshot|commit-nudge|sync|log-detour|add-epic|upgrade|rules|write-rules\n");
   process.exit(1);
 }))();

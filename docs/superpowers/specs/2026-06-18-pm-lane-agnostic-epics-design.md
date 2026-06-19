@@ -252,7 +252,7 @@ proposal**." A substantial detour may be a Superpowers or claude-code job.
 
 ## Testing (TDD, `node:test`, zero deps)
 
-Run with `node --test plugins/pm/scripts/`. Strategy: **subprocess integration** — invoke the
+Run with `node --test plugins/pm/scripts/conductor.test.mjs`. Strategy: **subprocess integration** — invoke the
 real CLI (`node conductor.mjs <cmd>`) against a temp `CLAUDE_PROJECT_DIR`, asserting on
 `state.json` / `PROJECT.md` / stdout. This tests the real contract without refactoring the
 import-time dispatch, and naturally expresses the acceptance scenario.
