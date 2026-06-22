@@ -33,6 +33,7 @@
  */
 
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -96,6 +97,29 @@ function pluginVersion() {
     : path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
   const pj = readJSON(path.join(root, ".claude-plugin", "plugin.json"), null);
   return pj && pj.version ? String(pj.version) : null;
+}
+
+/** Highest pm version present in the plugin cache, or null if it can't be determined.
+ *  Cache root is env-overridable for testability. Per-entry resilient: one bad
+ *  plugin.json doesn't collapse the scan. */
+function newestInstalledVersion() {
+  const cacheRoot = process.env.PM_CACHE_ROOT || path.join(os.homedir(), ".claude", "plugins", "cache");
+  let best = null;
+  try {
+    for (const mp of fs.readdirSync(cacheRoot, { withFileTypes: true })) {
+      if (!mp.isDirectory()) continue;
+      const pmDir = path.join(cacheRoot, mp.name, "pm");
+      let versions;
+      try { versions = fs.readdirSync(pmDir, { withFileTypes: true }); } catch { continue; }
+      for (const v of versions) {
+        if (!v.isDirectory()) continue;
+        const pj = readJSON(path.join(pmDir, v.name, ".claude-plugin", "plugin.json"), null);
+        const ver = pj && pj.version ? String(pj.version) : null;
+        if (ver && (best === null || cmpVer(ver, best) > 0)) best = ver;
+      }
+    }
+  } catch { /* cache root absent/unreadable → null */ }
+  return best;
 }
 
 /** Numeric semver compare: <0 if a<b, 0 if equal, >0 if a>b. */
@@ -302,11 +326,19 @@ function buildBrief(state) {
   const byId = Object.fromEntries(epics.map(e => [e.id, e]));
   const L = [];
 
-  const running = pluginVersion();
   const stamped = state.pmVersion || "0.0.0";
-  if (running && cmpVer(stamped, running) < 0) {
-    L.push(`⚠ pm ${stamped} → ${running} since this repo was set up — run \`/pm:upgrade\` (CLAUDE.md rules and epic schema may need refreshing).`);
-    L.push("");
+  const newest = newestInstalledVersion();
+  if (newest !== null) {
+    if (cmpVer(stamped, newest) < 0) {
+      L.push(`⚠ pm ${stamped} → ${newest} available — run \`/reload-plugins\` (if you just updated the plugin), then \`/pm:upgrade\`.`);
+      L.push("");
+    }
+  } else {
+    const running = pluginVersion();
+    if (running && cmpVer(stamped, running) < 0) {
+      L.push(`⚠ pm ${stamped} → ${running} since this repo was set up — run \`/pm:upgrade\` (CLAUDE.md rules and epic schema may need refreshing).`);
+      L.push("");
+    }
   }
 
   L.push("CONDUCTOR STATE — where we are and what's next");
@@ -634,6 +666,16 @@ const MIGRATIONS = [
 
 function upgrade() {
   if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const running = pluginVersion();
+  const newest = newestInstalledVersion();
+  if (running && newest && cmpVer(newest, running) > 0) {
+    process.stderr.write(
+      `conductor: this is pm ${running}, but ${newest} is installed — your session is still ` +
+      `running the old engine.\n` +
+      `Run /reload-plugins (or restart Claude Code), then /pm:upgrade again.\n` +
+      `(Running the engine directly from a checkout? Set PM_CACHE_ROOT to override.)\n`);
+    process.exit(1);
+  }
   const state = loadState();
   const stamped = state.pmVersion || "0.0.0";
   let applied = 0;

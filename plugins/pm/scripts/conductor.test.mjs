@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ENGINE = path.join(path.dirname(fileURLToPath(import.meta.url)), "conductor.mjs");
+const EMPTY_CACHE = fs.mkdtempSync(path.join(os.tmpdir(), "pm-empty-cache-"));
 
 export function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "pm-test-"));
@@ -14,7 +15,7 @@ export function tmpRepo() {
 export function run(args, { cwd, env = {} } = {}) {
   return execFileSync("node", [ENGINE, ...args], {
     cwd,
-    env: { ...process.env, CLAUDE_PROJECT_DIR: cwd, ...env },
+    env: { ...process.env, CLAUDE_PROJECT_DIR: cwd, PM_CACHE_ROOT: EMPTY_CACHE, ...env },
     encoding: "utf8",
   });
 }
@@ -280,6 +281,16 @@ test("sync: openspec change discovered in same run prevents same-id plan from be
   assert.equal(matches[0].lane, "openspec", "openspec change should win over same-run plan");
 });
 
+function fixtureCache(versions) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "pm-cache-"));
+  for (const v of versions) {
+    const dir = path.join(root, "mp", "pm", v, ".claude-plugin");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, "plugin.json"), JSON.stringify({ name: "pm", version: v }) + "\n");
+  }
+  return root;
+}
+
 function fixturePluginRoot(version) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "pm-plugin-"));
   fs.mkdirSync(path.join(dir, ".claude-plugin"), { recursive: true });
@@ -483,4 +494,77 @@ test("rules block mentions planned status and the roadmap on-ramp", () => {
   const out = run(["rules"], { cwd });
   assert.match(out, /planned/);
   assert.match(out, /roadmap/i);
+});
+
+test("upgrade refuses when a newer pm is installed than the running engine", () => {
+  const cwd = tmpRepo();
+  const root03 = fixturePluginRoot("0.4.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root03 } });
+  const stampedBefore = readState(cwd).pmVersion; // 0.4.0
+  const cache = fixtureCache(["0.4.0", "0.4.1"]);
+  const err = expectFail(() => run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root03, PM_CACHE_ROOT: cache } }));
+  assert.ok(err, "expected non-zero exit when stale");
+  assert.match(String(err.stderr || err.message), /0\.4\.0.*0\.4\.1|0\.4\.1.*installed/);
+  assert.equal(readState(cwd).pmVersion, stampedBefore); // unchanged — no mutation
+});
+
+test("upgrade proceeds when the running engine is the newest installed", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.4.1");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const cache = fixtureCache(["0.4.0", "0.4.1"]);
+  run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root, PM_CACHE_ROOT: cache } });
+  assert.equal(readState(cwd).pmVersion, "0.4.1");
+});
+
+test("upgrade proceeds when the cache cannot be read (newest null)", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.4.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  // PM_CACHE_ROOT defaults to the empty cache → newest is null → guard no-op
+  run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  assert.equal(readState(cwd).pmVersion, "0.4.0");
+});
+
+test("newest-version semver: 0.10.0 beats 0.9.0 (guard fires)", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.9.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const cache = fixtureCache(["0.9.0", "0.10.0"]);
+  const err = expectFail(() => run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root, PM_CACHE_ROOT: cache } }));
+  assert.ok(err, "0.10.0 must be treated as newer than 0.9.0");
+});
+
+test("nudge fires from newest-installed even when the running engine is old", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.3.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } }); // stamps 0.3.0
+  const cache = fixtureCache(["0.3.0", "0.4.1"]);
+  const out = JSON.parse(run(["brief"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root, PM_CACHE_ROOT: cache } }))
+    .hookSpecificOutput.additionalContext;
+  assert.match(out, /pm 0\.3\.0 → 0\.4\.1 available/);
+  assert.match(out, /\/reload-plugins/);
+  assert.match(out, /\/pm:upgrade/);
+});
+
+test("no nudge when stamped equals newest installed", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.4.1");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const cache = fixtureCache(["0.4.1"]);
+  const out = JSON.parse(run(["brief"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root, PM_CACHE_ROOT: cache } }))
+    .hookSpecificOutput.additionalContext;
+  assert.doesNotMatch(out, /available —/);
+  assert.doesNotMatch(out, /since this repo was set up/);
+});
+
+test("nudge falls back to running-version comparison when cache is unreadable", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.3.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const newer = fixturePluginRoot("0.4.1");
+  // default PM_CACHE_ROOT (empty) → newest null → fallback compares stamped(0.3.0) vs running(0.4.1)
+  const out = JSON.parse(run(["brief"], { cwd, env: { CLAUDE_PLUGIN_ROOT: newer } }))
+    .hookSpecificOutput.additionalContext;
+  assert.match(out, /since this repo was set up/);
 });
