@@ -69,7 +69,7 @@
       `{type, epic, reason?}`, DROPS an unrecoverable entry (empty string / `{}`), passes valid
       object links through unchanged, stamps `pmVersion` to `0.5.0`, and is idempotent on a second run.
 - [x] 5.3 GREEN: add the repair-first `0.5.0` `MIGRATIONS` entry. Tests pass.
-- [ ] 5.4 Bump `plugins/pm/.claude-plugin/plugin.json` to `0.5.0`; add the `0.5.0` `CHANGELOG.md`
+- [x] 5.4 Bump `plugins/pm/.claude-plugin/plugin.json` to `0.5.0`; add the `0.5.0` `CHANGELOG.md`
       entry (added fields/subcommands, tracker awareness, backward-compat note, upgrade steps).
 - [ ] 5.5 Update `README.md` and `skills/conductor/SKILL.md` for hierarchy, tracker awareness,
       `add-many`, and `update-epic`.
