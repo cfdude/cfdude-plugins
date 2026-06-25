@@ -12,11 +12,12 @@ const EMPTY_CACHE = fs.mkdtempSync(path.join(os.tmpdir(), "pm-empty-cache-"));
 export function tmpRepo() {
   return fs.mkdtempSync(path.join(os.tmpdir(), "pm-test-"));
 }
-export function run(args, { cwd, env = {} } = {}) {
+export function run(args, { cwd, env = {}, input } = {}) {
   return execFileSync("node", [ENGINE, ...args], {
     cwd,
     env: { ...process.env, CLAUDE_PROJECT_DIR: cwd, PM_CACHE_ROOT: EMPTY_CACHE, ...env },
     encoding: "utf8",
+    input,
   });
 }
 export function readState(cwd) {
@@ -567,4 +568,323 @@ test("nudge falls back to running-version comparison when cache is unreadable", 
   const out = JSON.parse(run(["brief"], { cwd, env: { CLAUDE_PLUGIN_ROOT: newer } }))
     .hookSpecificOutput.additionalContext;
   assert.match(out, /since this repo was set up/);
+});
+
+// ───────────────────────── 0.5.0: epic hierarchy ─────────────────────────
+
+test("0.4.1-shaped state (no parent/externalId/tracker) loads and renders unchanged", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  // A state exactly as v0.4.1 would write it — no new fields anywhere.
+  writeState(cwd, {
+    version: 1, active: "live", detourStack: [], pmVersion: "0.4.1",
+    epics: [
+      { id: "live", title: "Live one", priority: "P0", status: "active", role: "epic", lane: "openspec", links: [], reconcileNeeded: false },
+      { id: "q", title: "Queued", priority: "P1", status: "queued", role: "epic", lane: "superpowers", stories: [{ title: "a", done: false }], links: [] },
+    ],
+  });
+  run(["render"], { cwd });
+  const md = projectMd(cwd);
+  assert.match(md, /`live`/);
+  assert.match(md, /`q`/);
+  assert.doesNotMatch(md, /undefined/);
+  const brief = parseBrief(cwd);
+  assert.match(brief, /NOW: `live`/);
+  assert.doesNotMatch(brief, /undefined/);
+});
+
+test("add-epic --parent sets parent when the parent exists", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "sprint", "--lane", "external", "--priority", "P0"], { cwd });
+  run(["add-epic", "--id", "child-1", "--lane", "external", "--parent", "sprint"], { cwd });
+  assert.equal(readState(cwd).epics.find(e => e.id === "child-1").parent, "sprint");
+});
+
+test("add-epic --parent rejects a non-existent parent and writes nothing", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const before = readState(cwd).epics.length;
+  const err = expectFail(() => run(["add-epic", "--id", "orphan", "--lane", "external", "--parent", "nope"], { cwd }));
+  assert.ok(err, "expected non-zero exit for missing parent");
+  assert.match(String(err.stderr || err.message), /parent/i);
+  assert.equal(readState(cwd).epics.length, before);
+});
+
+test("render groups children under their parent with indent, rollup, and sorted siblings", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "sprint", title: "Sprint", priority: "P0", status: "queued", role: "epic", lane: "external", links: [] },
+    { id: "c-b", title: "cb", priority: "P1", status: "queued", role: "epic", lane: "external", parent: "sprint", links: [] },
+    { id: "c-a", title: "ca", priority: "P0", status: "archived", role: "epic", lane: "external", parent: "sprint", links: [] },
+  ]});
+  run(["render"], { cwd });
+  const md = projectMd(cwd);
+  assert.match(md, /└─ `c-a`/);                       // children indented
+  assert.match(md, /└─ `c-b`/);
+  assert.match(md, /1\/2 children archived/);          // rollup on the parent row
+  assert.ok(md.indexOf("`sprint`") < md.indexOf("`c-a`"), "parent renders before its children");
+  assert.ok(md.indexOf("`c-a`") < md.indexOf("`c-b`"), "siblings sorted by priority (P0 before P1)");
+});
+
+test("render indents grandchildren one level deeper", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "p", title: "p", priority: "P0", status: "queued", role: "epic", lane: "external", links: [] },
+    { id: "c", title: "c", priority: "P0", status: "queued", role: "epic", lane: "external", parent: "p", links: [] },
+    { id: "gc", title: "gc", priority: "P0", status: "queued", role: "epic", lane: "external", parent: "c", links: [] },
+  ]});
+  run(["render"], { cwd });
+  const md = projectMd(cwd);
+  assert.match(md, /└─ `c`/);
+  assert.match(md, /└─ └─ `gc`/);
+});
+
+test("brief keeps a child's priority slot in NEXT UP and annotates its parent", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "par", title: "par", priority: "P2", status: "queued", role: "epic", lane: "external", links: [] },
+    { id: "kid", title: "kid", priority: "P0", status: "queued", role: "epic", lane: "external", parent: "par", links: [] },
+  ]});
+  const brief = parseBrief(cwd);
+  assert.ok(brief.indexOf("`kid`") < brief.indexOf("`par`"), "P0 child outranks its P2 parent in NEXT UP");
+  assert.match(brief, /`kid`[^\n]*parent: `par`/);     // child annotated with its parent
+});
+
+// ───────────────────────── 0.5.0: defensive render ─────────────────────────
+
+test("malformed links never render as undefined, valid links still show", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "a", title: "a", priority: "P1", status: "queued", role: "epic", lane: "external",
+      links: [{ reason: "broken — no type/epic" }, { type: "blocks", epic: "b" }] },
+    { id: "b", title: "b", priority: "P1", status: "queued", role: "epic", lane: "external", links: [] },
+  ]});
+  run(["render"], { cwd });
+  const md = projectMd(cwd);
+  assert.doesNotMatch(md, /undefined/);
+  assert.match(md, /blocks→b/);                  // valid link still rendered in the table
+  const brief = parseBrief(cwd);
+  assert.doesNotMatch(brief, /undefined/);
+  assert.match(brief, /`a` blocks `b`/);         // valid link still rendered in EPIC LINKS
+});
+
+// ─────────────────── 0.5.0: external-tracker awareness ───────────────────
+
+test("set-tracker writes a tracker block with a multi-entry statusIntent map", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["set-tracker", "--system", "jira", "--instance", "onvex", "--project", "JOB",
+       "--mechanism", "mcp", "--intent", "active:in-progress", "--intent", "paused:todo",
+       "--intent", "archived:done"], { cwd });
+  const t = readState(cwd).tracker;
+  assert.equal(t.system, "jira");
+  assert.equal(t.instance, "onvex");
+  assert.equal(t.projectKey, "JOB");
+  assert.equal(t.mechanism, "mcp");
+  assert.deepEqual(t.statusIntent, { active: "in-progress", paused: "todo", archived: "done" });
+});
+
+test("add-epic stores externalId/externalUrl", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "job-506", "--lane", "external",
+       "--external-id", "JOB-506", "--external-url", "https://onvex.example/JOB-506"], { cwd });
+  const e = readState(cwd).epics.find(x => x.id === "job-506");
+  assert.equal(e.externalId, "JOB-506");
+  assert.equal(e.externalUrl, "https://onvex.example/JOB-506");
+});
+
+test("update-epic records external id/url onto an existing epic (write-back)", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "job-507", "--lane", "external"], { cwd });
+  run(["update-epic", "job-507", "--external-id", "JOB-507", "--external-url", "https://onvex.example/JOB-507"], { cwd });
+  const e = readState(cwd).epics.find(x => x.id === "job-507");
+  assert.equal(e.externalId, "JOB-507");
+  assert.equal(e.externalUrl, "https://onvex.example/JOB-507");
+});
+
+test("update-epic re-status/re-priority works; self-parent and cycle are rejected", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "a", "--lane", "external"], { cwd });
+  run(["add-epic", "--id", "b", "--lane", "external", "--parent", "a"], { cwd }); // b under a
+  run(["update-epic", "a", "--status", "active", "--priority", "P0"], { cwd });
+  const e = readState(cwd).epics.find(x => x.id === "a");
+  assert.equal(e.status, "active");
+  assert.equal(e.priority, "P0");
+  assert.ok(expectFail(() => run(["update-epic", "a", "--parent", "a"], { cwd })), "self-parent rejected");
+  assert.ok(expectFail(() => run(["update-epic", "a", "--parent", "b"], { cwd })), "cycle rejected");
+  assert.equal(readState(cwd).epics.find(x => x.id === "a").parent, undefined);
+});
+
+test("update-epic on an unknown id exits non-zero and writes nothing", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "real", "--lane", "external"], { cwd });
+  const before = fs.readFileSync(path.join(cwd, ".conductor", "state.json"), "utf8");
+  const err = expectFail(() => run(["update-epic", "ghost", "--status", "active"], { cwd }));
+  assert.ok(err, "expected non-zero exit for unknown id");
+  assert.equal(fs.readFileSync(path.join(cwd, ".conductor", "state.json"), "utf8"), before);
+});
+
+test("rules block gains an External tracker sync section only when a tracker is configured", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  assert.doesNotMatch(claudeMd(cwd), /External tracker sync/);     // none after a plain init
+  run(["set-tracker", "--system", "jira", "--project", "JOB"], { cwd });
+  assert.match(claudeMd(cwd), /External tracker sync/);
+  assert.match(claudeMd(cwd), /jira/);
+});
+
+test("brief surfaces create-issue drift only for unmirrored active-work epics", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [],
+    tracker: { system: "jira", projectKey: "JOB", statusIntent: {} },
+    epics: [
+      { id: "m1", title: "m1", priority: "P1", status: "queued", role: "epic", lane: "external", links: [] },                       // unmirrored → listed
+      { id: "m2", title: "m2", priority: "P1", status: "active", role: "epic", lane: "external", externalId: "JOB-2", links: [] },   // mirrored → excluded
+      { id: "done", title: "done", priority: "P1", status: "archived", role: "epic", lane: "external", links: [] },                  // archived → excluded
+      { id: "later", title: "later", priority: "P1", status: "planned", role: "epic", lane: "external", links: [] },                 // planned → excluded
+      { id: "ghost", title: "ghost", priority: "P1", status: "queued", role: "epic", lane: "openspec", links: [] },                  // missing() openspec → excluded
+    ]});
+  const brief = parseBrief(cwd);
+  assert.match(brief, /TRACKER SYNC \(jira · JOB\)/);
+  const syncLine = brief.split("\n").find(l => /not yet in jira/.test(l)) || "";
+  assert.match(syncLine, /`m1`/);
+  for (const id of ["m2", "done", "later", "ghost"]) assert.doesNotMatch(syncLine, new RegExp(`\`${id}\``));
+});
+
+test("no tracker block → no TRACKER SYNC in the brief", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [], epics: [
+    { id: "x", title: "x", priority: "P1", status: "queued", role: "epic", lane: "external", links: [] }]});
+  assert.doesNotMatch(parseBrief(cwd), /TRACKER SYNC/);
+});
+
+test("brief invents no transition drift when all active epics are mirrored", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  writeState(cwd, { version: 1, active: null, detourStack: [],
+    tracker: { system: "jira", projectKey: "JOB", statusIntent: { archived: "done" } },
+    epics: [{ id: "m", title: "m", priority: "P1", status: "active", role: "epic", lane: "external", externalId: "JOB-1", links: [] }]});
+  const brief = parseBrief(cwd);
+  assert.doesNotMatch(brief, /not yet in jira/);                       // nothing to create
+  assert.doesNotMatch(brief, /transition pending|out of sync|drift/i); // no fabricated transition drift
+});
+
+// ───────────────────────── 0.5.0: bulk creation ─────────────────────────
+
+function writeBatch(cwd, obj) {
+  const p = path.join(cwd, "batch.json");
+  fs.writeFileSync(p, JSON.stringify(obj));
+  return p;
+}
+
+test("add-many creates a parent + children atomically; children inherit the parent id", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const batch = writeBatch(cwd, {
+    parent: { id: "sprint", title: "Sprint", lane: "external", priority: "P0", status: "queued" },
+    epics: [
+      { id: "job-1", title: "one", lane: "external", priority: "P0", externalId: "JOB-1" },
+      { id: "job-2", title: "two", lane: "external", priority: "P1" },
+    ],
+  });
+  run(["add-many", "--from", batch], { cwd });
+  const s = readState(cwd);
+  assert.ok(s.epics.find(e => e.id === "sprint"));
+  assert.equal(s.epics.find(e => e.id === "job-1").parent, "sprint");
+  assert.equal(s.epics.find(e => e.id === "job-2").parent, "sprint");
+  assert.equal(s.epics.find(e => e.id === "job-1").externalId, "JOB-1");
+});
+
+test("add-many children-only batch leaves parent unset", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const batch = writeBatch(cwd, { epics: [
+    { id: "x", lane: "external", priority: "P1" }, { id: "y", lane: "external", priority: "P1" }] });
+  run(["add-many", "--from", batch], { cwd });
+  const s = readState(cwd);
+  assert.ok(s.epics.find(e => e.id === "x") && s.epics.find(e => e.id === "y"));
+  assert.equal(s.epics.find(e => e.id === "x").parent, undefined);
+});
+
+test("add-many aborts the whole batch on one invalid entry, writing nothing", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const before = readState(cwd).epics.length;
+  const batch = writeBatch(cwd, { epics: [
+    { id: "good", lane: "external", priority: "P1" },
+    { id: "Bad ID", lane: "external" },                 // malformed id
+  ]});
+  assert.ok(expectFail(() => run(["add-many", "--from", batch], { cwd })), "expected non-zero exit");
+  assert.equal(readState(cwd).epics.length, before);     // nothing written — not even 'good'
+});
+
+test("add-many rejects a duplicate id within the batch", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const batch = writeBatch(cwd, { epics: [{ id: "dup", lane: "external" }, { id: "dup", lane: "external" }] });
+  assert.ok(expectFail(() => run(["add-many", "--from", batch], { cwd })));
+  assert.equal(readState(cwd).epics.length, 0);
+});
+
+test("add-many rejects a duplicate against an existing epic", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  run(["add-epic", "--id", "exists", "--lane", "external"], { cwd });
+  const batch = writeBatch(cwd, { epics: [{ id: "exists", lane: "external" }] });
+  assert.ok(expectFail(() => run(["add-many", "--from", batch], { cwd })));
+  assert.equal(readState(cwd).epics.filter(e => e.id === "exists").length, 1);
+});
+
+test("add-many reads a batch from stdin (--from -)", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const batch = JSON.stringify({ epics: [{ id: "s1", lane: "external", priority: "P1" }] });
+  run(["add-many", "--from", "-"], { cwd, input: batch });
+  assert.ok(readState(cwd).epics.find(e => e.id === "s1"));
+});
+
+test("add-many rejects an intra-batch parent cycle", () => {
+  const cwd = tmpRepo();
+  run(["init"], { cwd });
+  const batch = writeBatch(cwd, { epics: [
+    { id: "x", lane: "external", parent: "y" }, { id: "y", lane: "external", parent: "x" }] });
+  assert.ok(expectFail(() => run(["add-many", "--from", batch], { cwd })));
+  assert.equal(readState(cwd).epics.length, 0);
+});
+
+// ───────────────────────── 0.5.0: link migration ─────────────────────────
+
+test("0.5.0 migration repairs colon-string links, drops unrecoverable, is idempotent", () => {
+  const cwd = tmpRepo();
+  const root = fixturePluginRoot("0.5.0");
+  run(["init"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const s = readState(cwd);
+  s.pmVersion = "0.4.1";
+  s.epics.push({ id: "a", title: "a", priority: "P1", status: "queued", role: "epic", lane: "openspec",
+    links: ["blocks:other:was flaky", { type: "related", epic: "z" }, "", {}] });
+  writeState(cwd, s);
+
+  run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  const after = readState(cwd);
+  assert.equal(after.pmVersion, "0.5.0");
+  const links = after.epics.find(e => e.id === "a").links;
+  assert.deepEqual(links.find(l => l.type === "blocks"), { type: "blocks", epic: "other", reason: "was flaky" });
+  assert.ok(links.find(l => l.type === "related" && l.epic === "z"));  // valid object preserved
+  assert.equal(links.length, 2);                                       // "" and {} dropped
+
+  // idempotent on a second run
+  const first = fs.readFileSync(path.join(cwd, ".conductor", "state.json"), "utf8");
+  run(["upgrade"], { cwd, env: { CLAUDE_PLUGIN_ROOT: root } });
+  assert.equal(fs.readFileSync(path.join(cwd, ".conductor", "state.json"), "utf8"), first);
 });

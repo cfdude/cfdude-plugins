@@ -249,6 +249,28 @@ function bar(p) {
   return "—";
 }
 
+/** A link is renderable only when both endpoints are strings. Guards against
+ *  malformed/partial entries (incl. older schemas) that would render `undefined`. */
+function validLink(l) {
+  return l && typeof l.type === "string" && typeof l.epic === "string";
+}
+
+/** Normalize one stored link for the 0.5.0 migration. Repair-first:
+ *  a valid {type, epic} object passes through; the documented colon-string
+ *  encoding `type:epic[:reason]` (what add-epic's --link parser produces) is
+ *  repaired into an object; anything else is unrecoverable → null (dropped). */
+function normalizeLink(l) {
+  if (validLink(l)) return l;
+  if (typeof l === "string") {
+    const [type, epic, ...rest] = l.split(":");
+    if (type && epic) {
+      const reason = rest.join(":").trim();
+      return reason ? { type, epic, reason } : { type, epic };
+    }
+  }
+  return null;
+}
+
 /** Is the project currently inside a detour? (active epic is a detour, or stack non-empty) */
 function detourContext(state) {
   if (state.detourStack && state.detourStack.length) {
@@ -262,8 +284,13 @@ function detourContext(state) {
 
 // ---------- rules ----------
 
-function rulesBlock() {
-  return [
+/** The tracker block from state, or null — used to make emitted instructions tracker-aware. */
+function currentTracker() {
+  try { const t = loadState().tracker; return t && t.system ? t : null; } catch { return null; }
+}
+
+function rulesBlock(tracker) {
+  const lines = [
     RULES_BEGIN,
     "## PM Conductor — operating rules",
     "",
@@ -293,16 +320,35 @@ function rulesBlock() {
     "   as ordered backlog in `PROJECT.md` and a `planned: N` count in the briefing, without a",
     "   \"no change on disk\" warning; `/pm:sync` flips an openspec planned epic to untriaged once",
     "   its change is proposed. Have a roadmap doc? Read it in-session and load each item this way.",
-    RULES_END,
-    "",
-  ].join("\n");
+  ];
+  if (tracker && tracker.system) {
+    const sys = tracker.system;
+    const scope = tracker.projectKey ? ` · ${tracker.projectKey}` : "";
+    lines.push(
+      "",
+      `## External tracker sync (${sys}${scope})`,
+      "",
+      `This repo mirrors conductor epics to **${sys}**. YOU (the interactive agent) own this sync —`,
+      `the pm plugin NEVER calls ${sys} itself. On these events, perform the matching action with`,
+      "your own tooling (MCP, connector, CLI — whatever this project uses):",
+      `- A real epic has no \`externalId\` → create the ${sys} issue, then record its key with`,
+      "  `/pm:epic` → `update-epic <id> --external-id <KEY> --external-url <url>`.",
+      "- An epic moves to a status with a `statusIntent` (e.g. active/archived) → transition the",
+      "  linked issue toward that SEMANTIC target, resolving the real workflow transition yourself.",
+      `- A parent epic → create it as a ${sys} epic and link its children.`,
+      "The SessionStart brief lists epics not yet mirrored under `TRACKER SYNC`. Status-transition",
+      "sync is your responsibility on every status change (the brief does not fabricate it).",
+    );
+  }
+  lines.push(RULES_END, "");
+  return lines.join("\n");
 }
 
 function writeRules() {
   let existing = "";
   try { existing = fs.readFileSync(CLAUDE_MD, "utf8"); } catch { /* no CLAUDE.md yet */ }
 
-  const block = rulesBlock();
+  const block = rulesBlock(currentTracker());
   let next;
   if (existing.includes(RULES_BEGIN) && existing.includes(RULES_END)) {
     // refresh in place
@@ -371,7 +417,8 @@ function buildBrief(state) {
   if (queued.length) {
     L.push("NEXT UP (by priority, then lane):");
     for (const e of queued.slice(0, NEXT_CAP)) {
-      L.push(`  • \`${e.id}\` (${e.priority}, ${e.lane}, ${e.status}) — ${bar(e.progress)}`);
+      const pa = e.parent ? `, parent: \`${e.parent}\`` : "";
+      L.push(`  • \`${e.id}\` (${e.priority}, ${e.lane}, ${e.status}${pa}) — ${bar(e.progress)}`);
     }
     if (queued.length > NEXT_CAP) L.push(`  (+${queued.length - NEXT_CAP} more — see PROJECT.md)`);
     const counts = {};
@@ -388,10 +435,28 @@ function buildBrief(state) {
     L.push("");
   }
 
-  const links = epics.flatMap(e => (e.links || []).map(l => ({ from: e.id, ...l })));
+  const links = epics.flatMap(e => (e.links || []).filter(validLink).map(l => ({ from: e.id, ...l })));
   if (links.length) {
     L.push("EPIC LINKS:");
     for (const l of links) L.push(`  • \`${l.from}\` ${l.type} \`${l.epic}\`${l.reason ? ` — ${l.reason}` : ""}`);
+    L.push("");
+  }
+
+  // TRACKER SYNC — only when a tracker is configured, and only honestly-computable drift:
+  // active-work epics (queued/active/paused, excluding missing() ghosts) with no externalId.
+  // Status-transition sync is the agent's job (rules block), NOT fabricated here.
+  if (state.tracker && state.tracker.system) {
+    const tr = state.tracker;
+    const scope = tr.projectKey ? ` · ${tr.projectKey}` : "";
+    const unmirrored = epics.filter(e =>
+      ["queued", "active", "paused"].includes(e.status) && !missing(e) && !e.externalId);
+    L.push(`TRACKER SYNC (${tr.system}${scope}):`);
+    if (unmirrored.length) {
+      L.push(`  ⚠ not yet in ${tr.system} — create issues + record keys (update-epic): ` +
+        unmirrored.map(e => `\`${e.id}\``).join(", "));
+    } else {
+      L.push(`  ✓ all active epics are mirrored to ${tr.system}`);
+    }
     L.push("");
   }
 
@@ -450,11 +515,33 @@ function render() {
   md.push("");
   md.push("| Priority | Epic | Lane | Role | Status | Progress | Links |");
   md.push("|----------|------|------|------|--------|----------|-------|");
-  for (const e of epics) {
-    const links = (e.links || []).map(l => `${l.type}→${l.epic}`).join("; ") || "-";
+  // Render as a tree: roots in resolveEpics() order, each followed by its
+  // descendants depth-first. Grouping is render-only — it does not touch the
+  // resolveEpics() sort that buildBrief()/NEXT UP rely on.
+  const byId = new Map(epics.map(e => [e.id, e]));
+  const childrenOf = (id) => epics.filter(e => e.parent === id);
+  const epicRow = (e, depth) => {
+    const links = (e.links || []).filter(validLink).map(l => `${l.type}→${l.epic}`).join("; ") || "-";
     const miss = missing(e) ? " ⚠ no change on disk" : "";
-    md.push(`| ${e.priority} | \`${e.id}\` | ${e.lane} | ${e.role} | ${e.status}${e.reconcileNeeded ? " ⚠" : ""}${miss} | ${bar(e.progress)} | ${links} |`);
-  }
+    const indent = depth > 0 ? "└─ ".repeat(depth) : "";
+    const kids = childrenOf(e.id);
+    let progress = bar(e.progress);
+    if (kids.length) {
+      const archived = kids.filter(k => k.status === "archived").length;
+      const rollup = `${archived}/${kids.length} children archived`;
+      progress = progress === "—" ? rollup : `${rollup} · ${progress}`;
+    }
+    md.push(`| ${e.priority} | ${indent}\`${e.id}\` | ${e.lane} | ${e.role} | ${e.status}${e.reconcileNeeded ? " ⚠" : ""}${miss} | ${progress} | ${links} |`);
+  };
+  const seen = new Set();
+  const emit = (e, depth) => {
+    if (seen.has(e.id)) return;                 // cycle guard (validation prevents; render stays safe)
+    seen.add(e.id);
+    epicRow(e, depth);
+    for (const c of childrenOf(e.id)) emit(c, depth + 1);
+  };
+  for (const e of epics) if (!e.parent || !byId.has(e.parent)) emit(e, 0);
+  for (const e of epics) if (!seen.has(e.id)) emit(e, 0);   // orphaned by a cycle → render flat
   md.push("");
 
   md.push("## Recent detours");
@@ -611,9 +698,28 @@ function parseFlags(argv) {
     const k = a.slice(2);
     const v = (argv[i + 1] !== undefined && !argv[i + 1].startsWith("--")) ? argv[++i] : true;
     if (k === "link") (o.link || (o.link = [])).push(v);
+    else if (k === "intent") (o.intent || (o.intent = [])).push(v);
     else o[k] = v;
   }
   return o;
+}
+
+/** Validate a proposed `parent` for epic `id` against the current `epics`.
+ *  Returns an error string, or null if the parent is acceptable (or unset).
+ *  `id` need not yet exist (add-epic); for re-parenting (update-epic) it will.
+ *  Shared by add-epic, update-epic, and add-many so the tree stays acyclic. */
+function parentError(epics, id, parent) {
+  if (parent === undefined || parent === null) return null;
+  if (parent === id) return `epic '${id}' cannot be its own parent`;
+  const byId = new Map(epics.map(e => [e.id, e]));
+  if (!byId.has(parent)) return `parent '${parent}' is not a known epic`;
+  // Walk ancestors of `parent`; reaching `id` means this edge would close a cycle.
+  let cur = byId.get(parent), guard = 0;
+  while (cur && cur.parent && guard++ < 10000) {
+    if (cur.parent === id) return `setting parent '${parent}' on '${id}' would create a cycle`;
+    cur = byId.get(cur.parent);
+  }
+  return null;
 }
 
 function addEpic() {
@@ -641,15 +747,166 @@ function addEpic() {
     const reason = rest.join(":").trim();
     return reason ? { type, epic, reason } : { type, epic };
   });
+  const parent = str(f.parent);
+  if (parent !== undefined) {
+    const perr = parentError(state.epics, id, parent);
+    if (perr) { process.stderr.write(`conductor: ${perr}\n`); process.exit(1); }
+  }
   const epic = {
     id, title: str(f.title) || id, priority: str(f.priority) || "P?",
     status, role: "epic", lane, links, reconcileNeeded: false,
   };
   if (str(f.plan)) epic.planPath = f.plan;
+  if (parent !== undefined) epic.parent = parent;
+  if (str(f["external-id"]) !== undefined) epic.externalId = str(f["external-id"]);
+  if (str(f["external-url"]) !== undefined) epic.externalUrl = str(f["external-url"]);
   state.epics.push(epic);
   saveState(state);
   render();
   process.stderr.write(`conductor: added epic '${id}' (${lane}, ${status})\n`);
+}
+
+// ---------- add-many (atomic bulk create) ----------
+
+/** Bulk-create epics from a JSON batch `{ parent?, epics: [...] }`.
+ *  Validate EVERYTHING first (id format, uniqueness vs existing AND within the
+ *  batch, lane, status, parent refs/cycles); on any failure write nothing and
+ *  exit non-zero. One saveState at the end — atomic, and race-free. JSON only
+ *  (zero-dep engine). `--from -` reads stdin. */
+function addMany() {
+  if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const f = parseFlags(process.argv.slice(3));
+  const from = typeof f.from === "string" ? f.from : undefined;
+  if (!from) { process.stderr.write("usage: conductor.mjs add-many --from <path|->\n"); process.exit(1); }
+  let raw;
+  try { raw = from === "-" ? readStdin() : fs.readFileSync(path.resolve(ROOT, from), "utf8"); }
+  catch { process.stderr.write(`conductor: cannot read '${from}'\n`); process.exit(1); }
+  let doc;
+  try { doc = JSON.parse(raw); } catch { process.stderr.write("conductor: --from is not valid JSON\n"); process.exit(1); }
+
+  const state = loadState();
+  const parentId = doc.parent && typeof doc.parent.id === "string" ? doc.parent.id : undefined;
+  const incoming = [];
+  if (doc.parent) incoming.push({ ...doc.parent });
+  for (const e of Array.isArray(doc.epics) ? doc.epics : []) {
+    const entry = { ...e };
+    if (parentId && entry.parent === undefined) entry.parent = parentId;  // children default to the parent
+    incoming.push(entry);
+  }
+  if (!incoming.length) { process.stderr.write("conductor: add-many: nothing to add (need `parent` and/or `epics`)\n"); process.exit(1); }
+
+  const die = (msg) => { process.stderr.write(`conductor: add-many: ${msg}\n`); process.exit(1); };
+
+  // Pass 1 — id / lane / status / uniqueness (vs existing AND within batch).
+  const existingIds = new Set(state.epics.map(e => e.id));
+  const batchIds = new Set();
+  for (const e of incoming) {
+    const id = e.id;
+    if (typeof id !== "string" || !/^[a-z0-9][a-z0-9._-]*$/.test(id)) die(`bad id '${id}' (format ^[a-z0-9][a-z0-9._-]*$)`);
+    if (existingIds.has(id)) die(`epic '${id}' already exists`);
+    if (batchIds.has(id)) die(`duplicate id '${id}' within the batch`);
+    if (!e.lane || !KNOWN_LANES.includes(e.lane)) die(`epic '${id}': lane must be one of ${KNOWN_LANES.join("|")}`);
+    const status = e.status || "queued";
+    if (!KNOWN_STATUSES.includes(status)) die(`epic '${id}': status must be one of ${KNOWN_STATUSES.join("|")}`);
+    batchIds.add(id);
+  }
+  // Pass 2 — parent refs/cycles against the union of existing + the full batch.
+  const projected = [...state.epics, ...incoming.map(e => ({ id: e.id, parent: e.parent }))];
+  for (const e of incoming) {
+    if (e.parent !== undefined && e.parent !== null) {
+      const perr = parentError(projected, e.id, e.parent);
+      if (perr) die(perr);
+    }
+  }
+  // All valid — build and write once.
+  for (const e of incoming) {
+    const epic = {
+      id: e.id, title: typeof e.title === "string" ? e.title : e.id,
+      priority: typeof e.priority === "string" ? e.priority : "P?",
+      status: e.status || "queued", role: "epic", lane: e.lane,
+      links: Array.isArray(e.links) ? e.links : [], reconcileNeeded: false,
+    };
+    if (e.parent !== undefined && e.parent !== null) epic.parent = e.parent;
+    if (typeof e.externalId === "string") epic.externalId = e.externalId;
+    if (typeof e.externalUrl === "string") epic.externalUrl = e.externalUrl;
+    if (typeof e.planPath === "string") epic.planPath = e.planPath;
+    state.epics.push(epic);
+  }
+  saveState(state);
+  render();
+  process.stderr.write(`conductor: add-many added ${incoming.length} epic(s)\n`);
+}
+
+// ---------- update-epic (write-back) ----------
+
+/** Update an EXISTING epic's externalId/externalUrl/parent/status/priority.
+ *  The id is POSITIONAL (parseFlags skips non-`--` tokens). Closes the tracker
+ *  sync loop: after the agent creates an issue it records the key here. */
+function updateEpic() {
+  if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const argv = process.argv.slice(3);
+  const id = argv[0] && !argv[0].startsWith("--") ? argv[0] : undefined;
+  if (!id) { process.stderr.write("usage: conductor.mjs update-epic <id> [--external-id X] [--external-url U] [--parent P] [--status S] [--priority P]\n"); process.exit(1); }
+  const f = parseFlags(argv.slice(1));
+  const str = (v) => (typeof v === "string" ? v : undefined);
+  const state = loadState();
+  const epic = state.epics.find(e => e.id === id);
+  if (!epic) { process.stderr.write(`conductor: epic '${id}' not found\n`); process.exit(1); }
+
+  const parent = str(f.parent);
+  if (parent !== undefined) {
+    const perr = parentError(state.epics, id, parent);
+    if (perr) { process.stderr.write(`conductor: ${perr}\n`); process.exit(1); }
+  }
+  const status = str(f.status);
+  if (status !== undefined && !KNOWN_STATUSES.includes(status)) {
+    process.stderr.write(`conductor: --status must be one of ${KNOWN_STATUSES.join("|")}\n`); process.exit(1);
+  }
+
+  if (str(f["external-id"]) !== undefined) epic.externalId = str(f["external-id"]);
+  if (str(f["external-url"]) !== undefined) epic.externalUrl = str(f["external-url"]);
+  if (parent !== undefined) epic.parent = parent;
+  if (status !== undefined) epic.status = status;
+  if (str(f.priority) !== undefined) epic.priority = str(f.priority);
+
+  saveState(state);
+  render();
+  process.stderr.write(`conductor: updated '${id}'\n`);
+}
+
+// ---------- tracker ----------
+
+/** Write/merge the `tracker` block. Pure local state write — the engine NEVER
+ *  contacts the tracker; it only records that one is in use so the instructions
+ *  it emits (rules block + brief) can assign sync work to the interactive agent. */
+function setTracker() {
+  if (!isInitialized()) { process.stderr.write("conductor: run /pm:init first\n"); process.exit(1); }
+  const f = parseFlags(process.argv.slice(3));
+  const str = (v) => (typeof v === "string" ? v : undefined);
+  const state = loadState();
+  const t = { ...(state.tracker || {}) };
+  if (str(f.system) !== undefined) t.system = str(f.system);
+  if (str(f.instance) !== undefined) t.instance = str(f.instance);
+  if (str(f.project) !== undefined) t.projectKey = str(f.project);
+  if (str(f.mechanism) !== undefined) t.mechanism = str(f.mechanism);
+  if (Array.isArray(f.intent)) {
+    const si = { ...(t.statusIntent || {}) };
+    for (const pair of f.intent) {
+      if (typeof pair !== "string") continue;
+      const i = pair.indexOf(":");                 // split once — target may contain no ':'
+      if (i <= 0 || i === pair.length - 1) continue;
+      si[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+    }
+    t.statusIntent = si;
+  }
+  if (!t.system) {
+    process.stderr.write("conductor: set-tracker requires --system (e.g. jira)\n"); process.exit(1);
+  }
+  state.tracker = t;
+  saveState(state);
+  writeRules();   // refresh CLAUDE.md so the agent sees its new tracker-sync responsibility
+  render();
+  process.stderr.write(`conductor: tracker set (${t.system}${t.projectKey ? ` ${t.projectKey}` : ""})\n`);
 }
 
 // ---------- migrations ----------
@@ -660,6 +917,15 @@ const MIGRATIONS = [
     note: "stamp explicit lane on epics (lane-agnostic schema)",
     apply(state) {
       for (const e of state.epics) if (!e.lane) e.lane = "openspec";
+    },
+  },
+  {
+    release: "0.5.0",
+    note: "normalize links (repair colon-strings, drop unrecoverable)",
+    apply(state) {
+      for (const e of state.epics) {
+        e.links = (Array.isArray(e.links) ? e.links : []).map(normalizeLink).filter(Boolean);
+      }
     },
   },
 ];
@@ -701,10 +967,13 @@ const cmd = process.argv[2];
   sync: () => sync(false),
   "log-detour": logDetour,
   "add-epic": addEpic,
+  "add-many": addMany,
+  "update-epic": updateEpic,
+  "set-tracker": setTracker,
   upgrade,
-  rules: () => process.stdout.write(rulesBlock()),
+  rules: () => process.stdout.write(rulesBlock(currentTracker())),
   "write-rules": writeRules,
 }[cmd] || (() => {
-  process.stderr.write("usage: conductor.mjs init|render|brief|snapshot|commit-nudge|sync|log-detour|add-epic|upgrade|rules|write-rules\n");
+  process.stderr.write("usage: conductor.mjs init|render|brief|snapshot|commit-nudge|sync|log-detour|add-epic|add-many|update-epic|set-tracker|upgrade|rules|write-rules\n");
   process.exit(1);
 }))();

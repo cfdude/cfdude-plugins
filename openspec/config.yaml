@@ -1,0 +1,33 @@
+schema: spec-driven
+
+context: |
+  Repo: cfdude-plugins — a public Claude Code plugin marketplace. Active development is the
+  `pm` plugin under plugins/pm/ (a lightweight project-management conductor layered above
+  OpenSpec + Superpowers).
+
+  Tech stack: the engine is a single zero-dependency Node 18+ ES module
+  (plugins/pm/scripts/conductor.mjs) using only built-ins. Tests use the built-in Node test
+  runner: `node --test plugins/pm/scripts/conductor.test.mjs`. NEVER add an npm dependency;
+  prefer JSON (native) over any parser.
+
+  Architectural law: the pm plugin is an INSTRUCTION layer, never an INTEGRATION layer. It emits
+  instructions for the interactive Claude agent (the managed CLAUDE.md rules block, the
+  SessionStart/PreCompact brief, command-doc markdown). It must NEVER call an external system
+  (Jira, GitHub, Linear) itself. External-tracker sync is the agent's job; the engine only knows
+  a tracker is in use and shapes the instructions it already emits.
+
+  State of record is .conductor/state.json (carries pmVersion). PROJECT.md is generated — never
+  hand-edit. A schema change requires an additive, idempotent, backward-compatible MIGRATIONS
+  entry keyed to the new release; a state file written by the prior version must still load.
+
+  Conventions: conventional commits scoped to the plugin (feat(pm): …). Not Jira-tracked, so no
+  issue-key prefix. Never commit with --no-verify.
+
+rules:
+  proposal:
+    - Always include an explicit "Non-goals" / out-of-scope section.
+  tasks:
+    - Each task is TDD-shaped (write/extend a failing test, then implement) and sized to one
+      atomic conventional commit.
+    - Schema-changing tasks must include a backward-compatibility test (a prior-version
+      state.json still loads).
