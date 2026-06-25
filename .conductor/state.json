@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "active": "add-hierarchy-and-tracker-awareness",
+  "epics": [
+    {
+      "id": "add-hierarchy-and-tracker-awareness",
+      "title": "pm 0.5.0 — hierarchy + external-tracker awareness",
+      "priority": "P0",
+      "status": "active",
+      "role": "epic",
+      "lane": "openspec",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "2026-06-18-pm-0.4.0",
+      "title": "pm 0.4.0 — Implementation Plan",
+      "priority": "P2",
+      "status": "archived",
+      "role": "epic",
+      "lane": "superpowers",
+      "planPath": "docs/superpowers/plans/2026-06-18-pm-0.4.0.md",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "2026-06-18-pm-0.4.1",
+      "title": "pm 0.4.1 — Implementation Plan",
+      "priority": "P2",
+      "status": "archived",
+      "role": "epic",
+      "lane": "superpowers",
+      "planPath": "docs/superpowers/plans/2026-06-18-pm-0.4.1.md",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "2026-06-18-pm-lane-agnostic-epics",
+      "title": "Lane-Agnostic Epics for `pm` — Implementation Plan",
+      "priority": "P2",
+      "status": "archived",
+      "role": "epic",
+      "lane": "superpowers",
+      "planPath": "docs/superpowers/plans/2026-06-18-pm-lane-agnostic-epics.md",
+      "links": [],
+      "reconcileNeeded": false
+    }
+  ],
+  "detourStack": [],
+  "pmVersion": "0.4.1"
+}
