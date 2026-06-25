@@ -73,7 +73,7 @@
       entry (added fields/subcommands, tracker awareness, backward-compat note, upgrade steps).
 - [x] 5.5 Update `README.md` and `skills/conductor/SKILL.md` for hierarchy, tracker awareness,
       `add-many`, and `update-epic`.
-- [ ] 5.6 Verification: full suite green (`node --test plugins/pm/scripts/conductor.test.mjs`);
+- [x] 5.6 Verification: full suite green (`node --test plugins/pm/scripts/conductor.test.mjs`);
       end-to-end manual demo (configure a tracker, `add-many` a parent+children batch, render the
       tree, confirm the brief's tracker-sync drift lists unmirrored epics). Then run the Gate-2
       implementation review against the committed diff before docs are considered final.
