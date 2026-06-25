@@ -6,16 +6,16 @@
       parent, self-parent, and a cycle (a→b→a) each exit non-zero and write nothing.
 - [x] 1.3 GREEN: add optional `parent` field; implement one ancestor-walk validation helper
       (existence + no-self + no-cycle) and wire it into `add-epic`. Tests 1.1–1.2 pass.
-- [ ] 1.4 RED: add render tests — children indent under their parent (`└─`, doubled at depth 2),
+- [x] 1.4 RED: add render tests — children indent under their parent (`└─`, doubled at depth 2),
       siblings ordered by `priority→lane→id`, parent's Progress cell shows `X/Y children archived`;
       a P0 child of a P2 parent keeps its P0 slot in the brief's NEXT UP (grouping is render-only);
       brief NEXT-UP annotates a child with its parent id; a no-hierarchy repo renders identically
       to before. Update the existing exact-match row assertions to the new render output.
-- [ ] 1.5 GREEN: implement hierarchical render in `render()` (index by parent, depth-first walk,
+- [x] 1.5 GREEN: implement hierarchical render in `render()` (index by parent, depth-first walk,
       per-depth `└─ ` prefix, derive rollup into the Progress cell) WITHOUT touching `resolveEpics`'s
       sort, and add the parent annotation in `buildBrief()`, preserving the stamp-on-content-change
       skip. Tests pass.
-- [ ] 1.6 Document `--parent` in `commands/epic.md`. Manual demo: add a parent + two children,
+- [x] 1.6 Document `--parent` in `commands/epic.md`. Manual demo: add a parent + two children,
       `render`, eyeball the tree + rollup in PROJECT.md.
 
 ## 2. Render robustness (independent stale-link fix)
