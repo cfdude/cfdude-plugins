@@ -36,6 +36,12 @@ chaining individual `add-epic` calls).
 - **WHEN** two entries in the same batch share an id
 - **THEN** the batch is rejected and nothing is written
 
+#### Scenario: Intra-batch parent cycle is rejected
+
+- **WHEN** a batch defines entries whose `parent` references form a cycle entirely within the
+  batch (e.g. `x` parent `y` and `y` parent `x`)
+- **THEN** the batch is rejected, exits non-zero, and nothing is written
+
 #### Scenario: Successful batch writes once
 
 - **WHEN** a fully valid batch is applied

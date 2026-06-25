@@ -25,16 +25,31 @@ skipped rather than rendered as `undefined`.
 
 ### Requirement: 0.5.0 migration normalizes links
 
-A `0.5.0` entry in the engine's `MIGRATIONS` SHALL normalize stored `links`, dropping or repairing
-malformed entries, and stamp `pmVersion` to `0.5.0`. The migration MUST be additive and idempotent
-— running it a second time changes nothing.
+A `0.5.0` entry in the engine's `MIGRATIONS` SHALL normalize stored `links` and stamp `pmVersion`
+to `0.5.0`. Normalization is **repair-first, drop-only-if-unrecoverable**: a link stored as the
+colon-delimited string form `type:epic[:reason]` (the only documented historical encoding — it is
+exactly what `add-epic`'s `--link` parser produces) SHALL be repaired into the current
+`{ type, epic, reason? }` object; an entry that is neither a valid `{type, epic}` object nor a
+parseable colon-string SHALL be dropped. Valid object links pass through unchanged. The migration
+MUST be additive and idempotent — running it a second time changes nothing. (Defensive rendering —
+see the requirement above — is the shape-agnostic durable fix for any malformed link, including
+shapes this migration cannot repair; the migration is cleanup, not the user-facing fix.)
 
-#### Scenario: Migration drops malformed links
+#### Scenario: Migration repairs a recoverable colon-string link
 
-- **WHEN** `/pm:upgrade` runs against state containing a malformed link entry
-- **THEN** that entry is removed/normalized and `pmVersion` becomes `0.5.0`
+- **WHEN** `/pm:upgrade` runs against state where an epic's `links` entry is the string
+  `"blocks:other-epic:was-flaky"`
+- **THEN** that entry becomes `{ type: "blocks", epic: "other-epic", reason: "was-flaky" }` and
+  `pmVersion` becomes `0.5.0`
+
+#### Scenario: Migration drops an unrecoverable link
+
+- **WHEN** state contains a link entry that is neither a `{type, epic}` object nor a parseable
+  colon-string (e.g. an empty string or `{}`)
+- **THEN** that entry is removed and the epic otherwise survives
 
 #### Scenario: Migration is idempotent
 
-- **WHEN** the 0.5.0 migration runs a second time on already-migrated state
+- **WHEN** the 0.5.0 migration runs a second time on already-migrated state (all links are valid
+  objects)
 - **THEN** no further change is made

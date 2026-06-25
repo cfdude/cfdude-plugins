@@ -18,6 +18,22 @@ means the project is tracker-unaware (the default) and no tracker behavior activ
 - **THEN** the value is recorded and surfaced as a semantic target, and the engine never emits
   or resolves a literal tracker transition name itself
 
+### Requirement: statusIntent flag encoding
+
+`set-tracker` SHALL accept the `statusIntent` map via a REPEATABLE `--intent <status>:<target>`
+flag (e.g. `--intent active:in-progress --intent archived:done`), each occurrence adding one
+entry to the map. Because the engine's `parseFlags` overwrites repeated flags for every key
+except the explicitly-accumulated `link`, `intent` MUST be added to that accumulation list so
+repeated `--intent` flags collect into an array rather than the last one winning. Each value is
+split once on the first `:` into `{ status, target }`.
+
+#### Scenario: Multiple --intent flags build a map
+
+- **WHEN** `set-tracker … --intent active:in-progress --intent paused:todo --intent archived:done`
+  is run
+- **THEN** `tracker.statusIntent` is `{ active: "in-progress", paused: "todo", archived: "done" }`
+  and re-reads identically (a 3-entry map, not a single scalar)
+
 ### Requirement: Per-epic external identity
 
 An epic SHALL support optional `externalId` and `externalUrl` fields linking it to a specific
@@ -44,9 +60,11 @@ local state write and never contacts the tracker.
 ### Requirement: update-epic write-back subcommand
 
 The engine SHALL provide an `update-epic <id>` subcommand to update an EXISTING epic's
-`externalId`, `externalUrl`, `parent`, `status`, and `priority`. This closes the sync loop: after
-the agent creates a tracker issue it records the key back onto the epic. Updates SHALL enforce the
-same validation as creation (parent existence, no self-parent, no cycle, known status/priority).
+`externalId`, `externalUrl`, `parent`, `status`, and `priority`. The epic id is a POSITIONAL
+argument (read from `process.argv`, like `log-detour`), NOT a `--id` flag — `parseFlags` skips
+non-`--` tokens. This closes the sync loop: after the agent creates a tracker issue it records the
+key back onto the epic. Updates SHALL enforce the same validation as creation (parent existence,
+no self-parent, no cycle, known status/priority).
 
 #### Scenario: Record external id onto an existing epic
 
@@ -81,12 +99,23 @@ honestly-computable drift.
 
 #### Scenario: Brief lists unmirrored epics as create-issue drift
 
-- **WHEN** the brief is built, a tracker is configured, and a real epic (status queued, active,
-  archived, or paused) has no `externalId`
+- **WHEN** the brief is built, a tracker is configured, and an active-work epic — status
+  `queued`, `active`, or `paused` — has no `externalId`
 - **THEN** the brief's tracker-sync block lists that epic as needing a tracker issue created
+
+#### Scenario: Done and not-yet-real epics are excluded from create-issue drift
+
+- **WHEN** the brief is built and an epic is `archived` (completed work), is `untriaged`/`planned`
+  (not yet real work), or is a `missing()` ghost (an openspec epic with no change on disk)
+- **THEN** that epic is NOT listed as create-issue drift, regardless of `externalId`
 
 #### Scenario: No fabricated transition drift
 
 - **WHEN** the brief is built and epics already carry `externalId`
 - **THEN** the brief does NOT claim to detect un-synced status transitions (the engine cannot see
   tracker state); transition sync is left to the on-change rule in the rules block
+
+> NOTE: Agent-driven tracker DETECTION (in the `init`/`upgrade` command docs) is intentionally
+> agent-side and therefore not engine-testable — it inspects the live session for tracker signals
+> and confirms with the user before calling `set-tracker`. Only `set-tracker`'s persisted result
+> is covered by engine tests.

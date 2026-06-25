@@ -45,9 +45,19 @@ when an epic is set as its own parent, or when the link would introduce a cycle.
 
 ### Requirement: Hierarchical PROJECT.md rendering
 
-`PROJECT.md` SHALL render children indented beneath their parent in the Epics table. Families
-SHALL be grouped together and ordered by their parent's priority. A parent epic's row SHALL show
-a rollup of how many of its direct children are archived.
+`PROJECT.md` (the `render()` output) SHALL render children indented beneath their parent in the
+Epics table. Grouping is a `render()`-only concern: it MUST NOT change `resolveEpics`'s shared
+`priority → lane → id` sort, so the brief (`buildBrief`) and its NEXT UP ordering are unaffected
+(a P0 child of a P2 parent keeps its P0 position in NEXT UP). Within `render()`:
+
+- Top-level (root) epics appear in the existing `resolveEpics` order. Each root is immediately
+  followed by its descendants in a depth-first walk.
+- A descendant's Epic-id cell is prefixed with `└─ ` repeated once per depth level (depth 1 =
+  `└─ `, depth 2 = `└─ └─ `), so arbitrary nesting depth renders deterministically.
+- Children of the same parent are ordered by the same `priority → lane → id` comparison used for
+  roots.
+- A parent epic's **Progress cell** carries an `X/Y children archived` rollup (X = direct
+  children archived, Y = direct children) prefixed to its own progress string.
 
 #### Scenario: Children render under their parent
 
@@ -55,10 +65,21 @@ a rollup of how many of its direct children are archived.
 - **THEN** each child appears directly beneath its parent, its id cell prefixed with a `└─`
   indent marker, and is not also listed as a separate top-level row
 
-#### Scenario: Parent shows child-archived rollup
+#### Scenario: Grandchildren indent one level deeper
+
+- **WHEN** an epic has a child which itself has a child (depth 2)
+- **THEN** the grandchild renders beneath its parent with a doubled `└─ └─ ` indent marker
+
+#### Scenario: Parent shows child-archived rollup in its Progress cell
 
 - **WHEN** a parent has Y direct children of which X are archived
-- **THEN** the parent's row shows an `X/Y children archived` rollup
+- **THEN** the parent's Progress cell shows an `X/Y children archived` rollup
+
+#### Scenario: Grouping does not reorder the brief
+
+- **WHEN** a P0 child belongs to a P2 parent
+- **THEN** the child keeps its P0 position in the brief's NEXT UP (render-only grouping does not
+  touch `resolveEpics`'s sort)
 
 #### Scenario: Brief annotates a child with its parent
 

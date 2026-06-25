@@ -6,11 +6,15 @@
       parent, self-parent, and a cycle (a→b→a) each exit non-zero and write nothing.
 - [ ] 1.3 GREEN: add optional `parent` field; implement one ancestor-walk validation helper
       (existence + no-self + no-cycle) and wire it into `add-epic`. Tests 1.1–1.2 pass.
-- [ ] 1.4 RED: add render tests — children indent under their parent (`└─`), families grouped and
-      ordered by parent priority, parent row shows `X/Y children archived`; brief NEXT-UP annotates
-      a child with its parent id; a no-hierarchy repo renders identically to before.
-- [ ] 1.5 GREEN: implement hierarchical render in `render()` (index by parent, derive rollup) and
-      the parent annotation in `buildBrief()`, preserving the stamp-on-content-change skip. Tests pass.
+- [ ] 1.4 RED: add render tests — children indent under their parent (`└─`, doubled at depth 2),
+      siblings ordered by `priority→lane→id`, parent's Progress cell shows `X/Y children archived`;
+      a P0 child of a P2 parent keeps its P0 slot in the brief's NEXT UP (grouping is render-only);
+      brief NEXT-UP annotates a child with its parent id; a no-hierarchy repo renders identically
+      to before. Update the existing exact-match row assertions to the new render output.
+- [ ] 1.5 GREEN: implement hierarchical render in `render()` (index by parent, depth-first walk,
+      per-depth `└─ ` prefix, derive rollup into the Progress cell) WITHOUT touching `resolveEpics`'s
+      sort, and add the parent annotation in `buildBrief()`, preserving the stamp-on-content-change
+      skip. Tests pass.
 - [ ] 1.6 Document `--parent` in `commands/epic.md`. Manual demo: add a parent + two children,
       `render`, eyeball the tree + rollup in PROJECT.md.
 
@@ -23,9 +27,12 @@
 
 ## 3. External-tracker awareness
 
-- [ ] 3.1 RED: add a `set-tracker` round-trip test (`--system/--instance/--project/--mechanism/
-      --intent` write a `tracker` block that re-reads identically).
-- [ ] 3.2 GREEN: implement the `tracker` block + `set-tracker` subcommand (pure local write).
+- [ ] 3.1 RED: add a `set-tracker` round-trip test including a MULTI-entry `statusIntent` built
+      from repeated `--intent <status>:<target>` flags (e.g. active:in-progress + paused:todo +
+      archived:done) that re-reads as a 3-entry map, plus the scalar fields.
+- [ ] 3.2 GREEN: extend `parseFlags` to accumulate `intent` into an array (mirroring the existing
+      `link` special-case), then implement the `tracker` block + `set-tracker` subcommand (split
+      each `--intent` value once on `:`; pure local write). Tests pass.
 - [ ] 3.3 RED: add tests for per-epic `externalId`/`externalUrl` persistence and `update-epic`
       write-back — sets external fields on an existing epic; reuses parent validation (cycle
       rejected); unknown id exits non-zero and writes nothing.
@@ -39,24 +46,29 @@
       block in `buildBrief()`, both gated on `tracker` presence. Tests pass.
 - [ ] 3.7 Docs: add a `/pm:tracker` command doc; add the agent-driven detection step to
       `commands/init.md` and `commands/upgrade.md` (inspect signals → confirm with user →
-      `set-tracker`; upgrade detects only when no `tracker` block exists).
+      `set-tracker`; upgrade detects only when no `tracker` block exists). Detection is
+      intentionally agent-side and not engine-testable — only `set-tracker`'s persisted result is
+      covered by engine tests (3.1).
 
 ## 4. Bulk creation
 
 - [ ] 4.1 RED: add `add-many` tests — parent+children (children inherit parent id), children-only
       batch, atomicity (one malformed/duplicate entry aborts the whole batch with nothing written),
-      duplicate-within-batch rejected, and a valid batch persists in a single state write.
+      duplicate-within-batch rejected, intra-batch parent cycle (x↔y) rejected, and a valid batch
+      persists in a single state write.
 - [ ] 4.2 GREEN: implement `add-many --from <path|->` reading JSON `{parent?, epics[]}`,
       validate-all-then-write-once (native `JSON.parse`, no dependency). Tests pass.
 - [ ] 4.3 Docs: document `add-many` and `--external-id` in `commands/epic.md`.
 
 ## 5. Migration + release
 
-- [ ] 5.1 Inspect a real archived epic's old (v0.0.0-era) `links` shape so the migration normalizes
-      the actual stored shape, not a guess.
-- [ ] 5.2 RED: add tests that the `0.5.0` migration normalizes/drops malformed `links` and stamps
-      `pmVersion` to `0.5.0`, and that a second run is a no-op (idempotent).
-- [ ] 5.3 GREEN: add the `0.5.0` `MIGRATIONS` entry (normalize links). Tests pass.
+- [ ] 5.1 Confirm the recoverable historical link shape is the colon-string `type:epic[:reason]`
+      form produced by `add-epic`'s `--link` parser (no live specimen exists in-tree — links are
+      `[]` and the archive is empty; ground the migration on this documented encoding, not a guess).
+- [ ] 5.2 RED: add tests that the `0.5.0` migration REPAIRS a colon-string link into
+      `{type, epic, reason?}`, DROPS an unrecoverable entry (empty string / `{}`), passes valid
+      object links through unchanged, stamps `pmVersion` to `0.5.0`, and is idempotent on a second run.
+- [ ] 5.3 GREEN: add the repair-first `0.5.0` `MIGRATIONS` entry. Tests pass.
 - [ ] 5.4 Bump `plugins/pm/.claude-plugin/plugin.json` to `0.5.0`; add the `0.5.0` `CHANGELOG.md`
       entry (added fields/subcommands, tracker awareness, backward-compat note, upgrade steps).
 - [ ] 5.5 Update `README.md` and `skills/conductor/SKILL.md` for hierarchy, tracker awareness,

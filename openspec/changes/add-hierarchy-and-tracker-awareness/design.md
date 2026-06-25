@@ -40,12 +40,29 @@ rollups are derived at render time by indexing epics by parent. Alternative (a `
 parent) was rejected: it duplicates the edge and drifts. Cycle/self checks run against the derived
 ancestor chain on every `--parent` set (in `add-epic`, `add-many`, and `update-epic`).
 
+Grouping is a `render()`-only transform: it does NOT alter `resolveEpics`'s shared
+`priority → lane → id` sort, so `buildBrief`/NEXT UP are untouched and a P0 child of a P2 parent
+keeps its P0 position in the brief. In `render()`, roots appear in `resolveEpics` order; each root
+is followed by its descendants depth-first; a descendant's id cell is prefixed with `└─ ` once per
+depth level so arbitrary nesting renders deterministically; siblings use the same comparator as
+roots; the parent's Progress cell is prefixed with an `X/Y children archived` rollup. (Existing
+exact-match row assertions in conductor.test.mjs will be updated to match — expected, since render
+output changes.)
+
 **2. Tracker identity split: system-level vs per-epic.** System facts (`system`, `instance`,
 `projectKey`, `mechanism`, `statusIntent`) live ONCE in a `tracker` block; each epic carries only
 `externalId`/`externalUrl`. This keeps epics DRY and makes "is this project tracker-aware?" a
 single check. `statusIntent` stores a SEMANTIC target (e.g. `done`), never a literal transition
 name — the agent resolves the actual workflow transition with its own tooling, because workflows
 differ per project and the engine cannot (and must not) query them.
+
+`statusIntent` is a map, so its `set-tracker --intent <status>:<target>` flag must be REPEATABLE.
+`parseFlags` (conductor.mjs) overwrites repeated flags for every key except the hardcoded `link`
+accumulator; `intent` must be added to that same accumulation list (the one place `parseFlags`
+special-cases) so `--intent a:x --intent b:y` collects an array rather than the last winning. Each
+value splits once on the first `:`. Alternative (a single comma-joined `--intent` string parsed in
+`set-tracker`) was rejected: the repeatable form matches the existing `--link` precedent and is
+more natural for the agent to emit.
 
 **3. Engine emits instructions; the agent integrates.** The two behavioral surfaces are the rules
 block (a static "External tracker sync" responsibilities section, present only when a tracker is
@@ -65,7 +82,9 @@ transition) would make transition-drift truthfully computable — explicitly def
 create-only, so without an update path the agent could never record `externalId` onto an existing
 epic and the create-issue drift line would never clear. `update-epic <id>` mutates
 `externalId`/`externalUrl`/`parent`/`status`/`priority` on an existing epic under the same
-validation as creation. It also serves as the general re-parent / re-status primitive.
+validation as creation. It also serves as the general re-parent / re-status primitive. The id is a
+POSITIONAL argument (read from `process.argv`, mirroring `log-detour`), not a `--id` flag, because
+`parseFlags` skips non-`--` tokens.
 
 **6. `add-many` validates-all-then-writes-once.** Full validation (id format, uniqueness vs
 existing AND within-batch, lane, status, parent refs) happens before any mutation; a single
@@ -73,12 +92,17 @@ existing AND within-batch, lane, status, parent refs) happens before any mutatio
 that forced callers to chain individual `add-epic` invocations with `&&`. JSON only — `JSON.parse`
 is native, so no parser dependency is introduced.
 
-**7. Defensive render is the durable stale-link fix; migration is the cleanup.** The
-`undefined undefined` bug is a render fault: it should never emit a link whose `type`/`epic` are
-not strings. Fixing render covers archived epics that aren't even in `state.epics`. The `0.5.0`
-migration additionally normalizes stored malformed `links`. Before writing the migration,
-implementation MUST inspect the actual old (v0.0.0-era) link shape in a real archived epic so the
-normalization matches reality rather than a guess.
+**7. Defensive render is the durable stale-link fix; migration is best-effort cleanup.** The
+`undefined undefined` bug is a render fault: render should never emit a link whose `type`/`epic`
+are not strings. Fixing render is shape-agnostic and covers archived epics that aren't even in
+`state.epics` — it is the actual user-facing fix. The `0.5.0` migration is cleanup layered on top:
+it is **repair-first** — a link stored as the colon-string `type:epic[:reason]` (the only
+documented historical encoding; it is precisely what `add-epic`'s `--link` parser produces, see
+conductor.mjs `addEpic`) is repaired into `{type, epic, reason?}`; an entry that is neither a valid
+object nor a parseable colon-string is dropped; valid objects pass through. This avoids destroying
+recoverable data. No live link specimen exists in this repo (`.conductor/state.json` links are all
+`[]` and `openspec/changes/archive/` is empty), so the recoverable shape is grounded on the
+engine's own documented `--link` encoding rather than a phantom specimen — task 5.1 reflects this.
 
 ## Risks / Trade-offs
 
@@ -87,9 +111,11 @@ normalization matches reality rather than a guess.
   no-hierarchy repo renders identically to before.
 - **Cycle detection has edge cases (deep chains, re-parenting via `update-epic`).** → Centralize
   one ancestor-walk helper used by all three write paths; test a→b→a and self-parent directly.
-- **Migration guessing the old link shape wrong could drop valid links.** → Inspect a real
-  archived epic first (Gate-1 / pre-implementation); make the migration conservative (only drop
-  entries that fail the both-strings test) and idempotent; backward-compat load test guards it.
+- **Migration could destroy recoverable links if it only drops.** → Repair-first (parse the
+  documented colon-string encoding into an object), drop ONLY entries that are neither valid
+  objects nor parseable colon-strings; valid objects pass through; idempotent. Defensive render is
+  the shape-agnostic safety net for anything the migration can't repair. Backward-compat load test
+  plus repair/drop/idempotent tests guard it.
 - **Tracker instructions could leak into tracker-unaware repos.** → Gate every tracker surface on
   `tracker` block presence; test brief/rules emit nothing when unset.
 - **Scope is large for one change.** → Tasks are ordered precondition-first so hierarchy is a
@@ -106,5 +132,5 @@ normalization matches reality rather than a guess.
 
 ## Open Questions
 
-- None blocking. The exact old link shape for the migration is resolved during implementation by
-  inspecting a real archived epic (see Decision 7).
+- None blocking. The recoverable old link shape for the migration is the engine's own documented
+  colon-string `--link` encoding (Decision 7); no external specimen is required.
