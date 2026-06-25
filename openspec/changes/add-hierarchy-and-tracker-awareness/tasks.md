@@ -71,7 +71,7 @@
 - [x] 5.3 GREEN: add the repair-first `0.5.0` `MIGRATIONS` entry. Tests pass.
 - [x] 5.4 Bump `plugins/pm/.claude-plugin/plugin.json` to `0.5.0`; add the `0.5.0` `CHANGELOG.md`
       entry (added fields/subcommands, tracker awareness, backward-compat note, upgrade steps).
-- [ ] 5.5 Update `README.md` and `skills/conductor/SKILL.md` for hierarchy, tracker awareness,
+- [x] 5.5 Update `README.md` and `skills/conductor/SKILL.md` for hierarchy, tracker awareness,
       `add-many`, and `update-epic`.
 - [ ] 5.6 Verification: full suite green (`node --test plugins/pm/scripts/conductor.test.mjs`);
       end-to-end manual demo (configure a tracker, `add-many` a parent+children batch, render the
