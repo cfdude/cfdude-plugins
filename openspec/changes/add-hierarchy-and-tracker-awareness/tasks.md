@@ -20,9 +20,9 @@
 
 ## 2. Render robustness (independent stale-link fix)
 
-- [ ] 2.1 RED: add a test that an epic carrying a malformed link (missing `type` or `epic`) renders
+- [x] 2.1 RED: add a test that an epic carrying a malformed link (missing `type` or `epic`) renders
       with NO `undefined` token in PROJECT.md or the brief, and still renders the epic otherwise.
-- [ ] 2.2 GREEN: make link rendering in `render()` and `buildBrief()` emit a link only when both
+- [x] 2.2 GREEN: make link rendering in `render()` and `buildBrief()` emit a link only when both
       `type` and `epic` are strings. Test passes.
 
 ## 3. External-tracker awareness
