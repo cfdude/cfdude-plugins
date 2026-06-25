@@ -1,10 +1,10 @@
 ## 1. Epic hierarchy (precondition slice — ship first, demoable)
 
-- [ ] 1.1 RED: add test asserting a v0.4.1-shaped `state.json` (no `parent`/`tracker`/external
+- [x] 1.1 RED: add test asserting a v0.4.1-shaped `state.json` (no `parent`/`tracker`/external
       fields) loads intact — the backward-compatibility baseline guarding all later schema work.
-- [ ] 1.2 RED: add tests for `add-epic --parent` — valid existing parent sets `parent`; missing
+- [x] 1.2 RED: add tests for `add-epic --parent` — valid existing parent sets `parent`; missing
       parent, self-parent, and a cycle (a→b→a) each exit non-zero and write nothing.
-- [ ] 1.3 GREEN: add optional `parent` field; implement one ancestor-walk validation helper
+- [x] 1.3 GREEN: add optional `parent` field; implement one ancestor-walk validation helper
       (existence + no-self + no-cycle) and wire it into `add-epic`. Tests 1.1–1.2 pass.
 - [ ] 1.4 RED: add render tests — children indent under their parent (`└─`, doubled at depth 2),
       siblings ordered by `priority→lane→id`, parent's Progress cell shows `X/Y children archived`;
