@@ -38,13 +38,13 @@
       rejected); unknown id exits non-zero and writes nothing.
 - [x] 3.4 GREEN: add `externalId`/`externalUrl` fields and the `update-epic <id>` subcommand
       (`--external-id/--external-url/--parent/--status/--priority`) sharing the validation helper.
-- [ ] 3.5 RED: add tests for instruction weaving — rules block gains the "External tracker sync"
+- [x] 3.5 RED: add tests for instruction weaving — rules block gains the "External tracker sync"
       section ONLY when a tracker is configured; brief lists unmirrored real epics as create-issue
       drift; brief invents NO transition drift; with no tracker block, neither surface emits
       tracker text.
-- [ ] 3.6 GREEN: implement the tracker-sync section in `rulesBlock()` and the `TRACKER SYNC` drift
+- [x] 3.6 GREEN: implement the tracker-sync section in `rulesBlock()` and the `TRACKER SYNC` drift
       block in `buildBrief()`, both gated on `tracker` presence. Tests pass.
-- [ ] 3.7 Docs: add a `/pm:tracker` command doc; add the agent-driven detection step to
+- [x] 3.7 Docs: add a `/pm:tracker` command doc; add the agent-driven detection step to
       `commands/init.md` and `commands/upgrade.md` (inspect signals → confirm with user →
       `set-tracker`; upgrade detects only when no `tracker` block exists). Detection is
       intentionally agent-side and not engine-testable — only `set-tracker`'s persisted result is
