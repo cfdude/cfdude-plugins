@@ -52,13 +52,13 @@
 
 ## 4. Bulk creation
 
-- [ ] 4.1 RED: add `add-many` tests — parent+children (children inherit parent id), children-only
+- [x] 4.1 RED: add `add-many` tests — parent+children (children inherit parent id), children-only
       batch, atomicity (one malformed/duplicate entry aborts the whole batch with nothing written),
       duplicate-within-batch rejected, intra-batch parent cycle (x↔y) rejected, and a valid batch
       persists in a single state write.
-- [ ] 4.2 GREEN: implement `add-many --from <path|->` reading JSON `{parent?, epics[]}`,
+- [x] 4.2 GREEN: implement `add-many --from <path|->` reading JSON `{parent?, epics[]}`,
       validate-all-then-write-once (native `JSON.parse`, no dependency). Tests pass.
-- [ ] 4.3 Docs: document `add-many` and `--external-id` in `commands/epic.md`.
+- [x] 4.3 Docs: document `add-many` and `--external-id` in `commands/epic.md`.
 
 ## 5. Migration + release
 
