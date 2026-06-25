@@ -27,10 +27,10 @@
 
 ## 3. External-tracker awareness
 
-- [ ] 3.1 RED: add a `set-tracker` round-trip test including a MULTI-entry `statusIntent` built
+- [x] 3.1 RED: add a `set-tracker` round-trip test including a MULTI-entry `statusIntent` built
       from repeated `--intent <status>:<target>` flags (e.g. active:in-progress + paused:todo +
       archived:done) that re-reads as a 3-entry map, plus the scalar fields.
-- [ ] 3.2 GREEN: extend `parseFlags` to accumulate `intent` into an array (mirroring the existing
+- [x] 3.2 GREEN: extend `parseFlags` to accumulate `intent` into an array (mirroring the existing
       `link` special-case), then implement the `tracker` block + `set-tracker` subcommand (split
       each `--intent` value once on `:`; pure local write). Tests pass.
 - [ ] 3.3 RED: add tests for per-epic `externalId`/`externalUrl` persistence and `update-epic`
