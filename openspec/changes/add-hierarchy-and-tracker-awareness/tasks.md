@@ -33,10 +33,10 @@
 - [x] 3.2 GREEN: extend `parseFlags` to accumulate `intent` into an array (mirroring the existing
       `link` special-case), then implement the `tracker` block + `set-tracker` subcommand (split
       each `--intent` value once on `:`; pure local write). Tests pass.
-- [ ] 3.3 RED: add tests for per-epic `externalId`/`externalUrl` persistence and `update-epic`
+- [x] 3.3 RED: add tests for per-epic `externalId`/`externalUrl` persistence and `update-epic`
       write-back — sets external fields on an existing epic; reuses parent validation (cycle
       rejected); unknown id exits non-zero and writes nothing.
-- [ ] 3.4 GREEN: add `externalId`/`externalUrl` fields and the `update-epic <id>` subcommand
+- [x] 3.4 GREEN: add `externalId`/`externalUrl` fields and the `update-epic <id>` subcommand
       (`--external-id/--external-url/--parent/--status/--priority`) sharing the validation helper.
 - [ ] 3.5 RED: add tests for instruction weaving — rules block gains the "External tracker sync"
       section ONLY when a tracker is configured; brief lists unmirrored real epics as create-issue
