@@ -54,6 +54,16 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "feat-0.6.0-knowledge-surfacing",
+      "title": "pm 0.6.0 — changelog-on-upgrade + skill-orientation-on-init",
+      "priority": "P1",
+      "status": "archived",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
