@@ -64,6 +64,16 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "fix-0.6.1-archive-detection",
+      "title": "pm 0.6.1 — date-prefixed archive detection + active self-heal",
+      "priority": "P0",
+      "status": "archived",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
