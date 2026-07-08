@@ -74,6 +74,16 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "feat-0.7.0-set-active-and-resolver",
+      "title": "pm 0.7.0 — set-active/clear-active verbs, active/status sync, skill engine resolver",
+      "priority": "P0",
+      "status": "archived",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
