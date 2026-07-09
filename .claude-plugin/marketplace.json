@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Rob Sherman's public Claude Code plugins.",
-    "version": "1.0.0"
+    "version": "1.0.1"
   },
   "plugins": [
     {
@@ -36,7 +36,7 @@
       "name": "pm",
       "source": "./plugins/pm",
       "description": "Project-management conductor above OpenSpec and Superpowers: tracks proposals as epics, maintains an explicit detour stack, and enforces a reconcile gate so nothing is lost when development pivots or context is compacted.",
-      "version": "0.4.1",
+      "version": "0.7.0",
       "author": {
         "name": "Rob Sherman",
         "email": "rsherman@velocityinteractive.com"
@@ -65,6 +65,25 @@
         "gitignore",
         "documentation",
         "project-structure"
+      ],
+      "category": "developer-tools"
+    },
+    {
+      "name": "xquik-x-data",
+      "source": "./plugins/xquik-x-data",
+      "description": "Guides Xquik REST API and remote MCP workflows for X data, exports, monitoring, and webhooks.",
+      "version": "1.0.0",
+      "author": {
+        "name": "Xquik",
+        "url": "https://github.com/Xquik-dev/x-twitter-scraper"
+      },
+      "keywords": [
+        "xquik",
+        "x-data",
+        "mcp",
+        "api",
+        "webhooks",
+        "monitoring"
       ],
       "category": "developer-tools"
     }
