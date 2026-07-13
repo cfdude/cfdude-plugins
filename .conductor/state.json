@@ -154,6 +154,17 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "epic-level-autonomy",
+      "title": "pm 0.8.0 — epic-level autonomy contract",
+      "priority": "P1",
+      "status": "queued",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false,
+      "planPath": "docs/superpowers/plans/2026-07-13-epic-level-autonomy.md"
     }
   ],
   "detourStack": [],
