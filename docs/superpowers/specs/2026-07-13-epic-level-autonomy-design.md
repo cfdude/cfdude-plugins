@@ -54,9 +54,20 @@ This is a small, law-compliant engine addition: new fields + a verb to set them 
 `set-active`/`clear-active` verbs. No external calls, no violation of the instruction-layer law —
 it's data storage the engine already does for every other epic field.
 
-### 2. The preflight (what prevents autonomy from being useless)
+### 2. The preflight scan — a standalone, epic-id-parameterized primitive
 
-Before an epic's `autonomy.level` can be set to `autonomous`, the agent runs a **full read +
+**Build-order correction (from review):** the risk-scan is needed in two places — once per epic
+(this sub-project) and once per epic-*within-an-initiative* (the future sub-project B). Rather
+than build it as machinery embedded inside "epic autonomy," it must be its own callable unit,
+parameterized by epic id(s), so sub-project B reuses it unchanged instead of re-deriving it
+later. **This primitive is built and dogfooded FIRST, before the rest of the autonomy contract
+(state fields, execution decision rule, report) is built on top of it.**
+
+Shape: `scan-epic-for-autonomy-readiness(epicId | epicId[]) → findings[]`. Callable with a single
+id (epic-level autonomy, this sub-project) or an array (future initiative orchestration, which
+loops it over an initiative's children) — same function either way, no branching on caller.
+
+Before an epic's `autonomy.level` can be set to `autonomous`, this primitive runs a **full read +
 structured risk scan** of that epic's actual source (its `tasks.md` / `planPath` / OpenSpec
 spec — whichever is the progress source for its lane). It reasons over the whole document (not
 a keyword grep) to find:
@@ -67,7 +78,9 @@ a keyword grep) to find:
 
 It returns these as **one batch of questions**, presented to the user before execution starts —
 not discovered one at a time mid-run. The user answers each (approve / reject / "use your
-judgment"); answers are written into that epic's `preAuthorized` and `context` fields.
+judgment"); answers are written into that epic's `preAuthorized` and `context` fields (in the
+initiative case, per-child-epic, since one epic touching infra may need more than a sibling that
+doesn't).
 
 **Why full-read over keyword-triggered:** a keyword scan (grep for `DROP`, `migration`,
 `teardown`, `rm`, `schema`) is cheaper but misses risks that aren't destructive per se — an
@@ -139,9 +152,16 @@ On completion (or reconcile-gate-equivalent for a detour-free run):
 
 ## Validation plan
 
-Prove this on **one real epic** before building anything else — pick one of the five
-already-`planned` Comet-incorporation epics in `.conductor/state.json` as the test case, run it
-through preflight → autonomous execution → end-of-epic report, and confirm in practice that:
+**Step 0 (do this before writing an implementation plan):** dogfood the scan primitive alone —
+run it against one real target, with no autonomy-contract state machinery built yet, and judge
+whether its output (risk points + questions) is actually good enough to make preflight useful.
+If the scan itself is weak, no amount of autonomy-contract engineering around it will fix cause 2
+(false safety stops) — this is the hard part, proven first.
+
+**Step 1:** once the scan primitive is proven, build the rest of the autonomy contract (state
+fields, execution decision rule, end-of-epic report) and prove it end-to-end on one real epic —
+pick one of the five already-`planned` Comet-incorporation epics in `.conductor/state.json` (once
+proposed via OpenSpec, since `planned` epics have no `tasks.md`/spec yet to scan) — and confirm:
 
 - phase transitions no longer require manual invocation
 - destructive actions correctly split into stop/warn per the five-criteria rule
