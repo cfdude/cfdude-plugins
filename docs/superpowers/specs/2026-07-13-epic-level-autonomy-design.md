@@ -1,9 +1,13 @@
 # Epic-level autonomy — design
 
-> First sub-project of a larger vision (epic autonomy → initiative orchestration → portfolio
+> First sub-project of a larger vision (epic autonomy → epic-hierarchy orchestration → portfolio
 > architecture-consistency → infra-runbook preflight). This spec covers **only** epic-level
 > autonomy. The other three are named in "Forward-compatibility" below but explicitly out of
 > scope — see rationale.
+>
+> **Naming note:** what was earlier called "initiative-level orchestration" is renamed
+> **epic-hierarchy orchestration** — Jira deprecated the Initiative→Epic grouping to
+> Premium/Enterprise tiers, so this project must not depend on it. See Forward-compatibility.
 
 ## Problem
 
@@ -168,14 +172,20 @@ own tracker MCP tools, exactly as it already does for status mirroring.
 
 ## Forward-compatibility (explicitly not built in this sub-project)
 
-- **Initiative-level orchestration**: a future orchestrator will need to walk an initiative's
-  child epics and set each one's `autonomy` block individually (an epic touching infrastructure
-  gets more context/approval than a sibling that doesn't). Per-epic scoping above is designed so
-  this requires no schema change later — just a new caller that sets the same fields on multiple
-  epics. "Initiative" itself isn't modeled in `state.json` yet; the existing parent/child
-  hierarchy (`parent` field) may end up being the grouping, but that decision is deferred.
+- **Epic-hierarchy orchestration** (renamed from "initiative-level orchestration" — Jira's
+  Initiative→Epic grouping is Premium/Enterprise-only, so this project must not depend on it).
+  Instead, reuse pm's existing `parent` field: a pm parent-epic with children *is* the grouping,
+  no new concept needed. This maps cleanly onto Jira's free/standard-tier 3-level hierarchy —
+  **pm parent-epic ↔ Jira Epic, pm child-epic ↔ Jira Story/Task/Bug, pm epic's own
+  stories/steps ↔ Jira Subtask** — and works identically whether or not a tracker is attached at
+  all, since the mapping is purely how pm's own tree gets *mirrored*, not a dependency of pm's
+  tree itself. A future orchestrator walks a parent-epic's children and sets each child's
+  `autonomy` block individually (a child touching infrastructure gets more context/approval than
+  a sibling that doesn't) — the per-epic scoping in this design already supports that with no
+  schema change.
 - **Portfolio/architecture-consistency scanning** and **infra-runbook preflight** are separate
-  concerns layered on top of initiative orchestration, not this sub-project. Not designed here.
+  concerns layered on top of epic-hierarchy orchestration, not this sub-project. Not designed
+  here.
 
 ## Validation plan
 
