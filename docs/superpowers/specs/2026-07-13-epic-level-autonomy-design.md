@@ -139,6 +139,33 @@ On completion (or reconcile-gate-equivalent for a detour-free run):
 | Keyword-triggered lightweight scan | Cheap/fast; misses non-keyword ambiguity — risks silently sailing through, which is worse than the stalls it's meant to fix. |
 | Keyword-first, then full read of flagged sections only | Middle ground; rejected for v1 in favor of full read — can revisit if preflight cost becomes a real problem in practice. |
 
+### 5. Tracker-attached epics (Jira etc.) — what changes
+
+If the repo has a `tracker` block set (`/pm:tracker`) and this epic carries an `externalId`, the
+scan primitive and the autonomy contract both need one addition each. Both are instruction-layer
+only — the engine still never calls the tracker, consistent with its law; the *agent* uses its
+own tracker MCP tools, exactly as it already does for status mirroring.
+
+- **Source-reading step becomes lane-aware.** The scan can't rely on a local `tasks.md`/
+  `planPath` alone — for a tracker-linked epic, the real source of truth is the Jira issue
+  (description, comments) plus its linked child stories/subtasks. Before scanning, the agent
+  pulls the epic issue + children via its own tracker tools (e.g. `get_issue`,
+  `list_epic_issues`), same tools it already uses to mirror status.
+- **Approvals get mirrored, not re-stored.** `.conductor/state.json` stays the sole source of
+  truth for `autonomy.preAuthorized`/`context` (no change to the earlier decision) — but for a
+  tracker-linked epic, the agent should also post the preflight Q&A as a comment on the issue, so
+  stakeholders who never look at `state.json` can see what was authorized. This is a
+  non-authoritative echo, the same pattern the tracker block already uses for status intent — not
+  a second source of truth to keep in sync.
+- **New stop condition unique to tracker-attached epics: mid-run drift.** A local plan file
+  generally doesn't change unless the agent changes it; a Jira issue can be edited by someone
+  else while an autonomous run is in flight (scope change, new blocking comment, reprioritization).
+  The preflight is a one-time snapshot at kickoff — for tracker-linked epics that snapshot can go
+  stale mid-run. Treat "the tracker issue changed materially since the preflight snapshot" as
+  falling under decision-rule criterion 4 (no context to act on) — a genuine new unknown that
+  should stop execution for a fresh check-in, not be silently absorbed by the standing autonomy
+  grant.
+
 ## Forward-compatibility (explicitly not built in this sub-project)
 
 - **Initiative-level orchestration**: a future orchestrator will need to walk an initiative's
