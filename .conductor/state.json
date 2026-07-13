@@ -84,6 +84,66 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "assess-comet-vs-pm",
+      "title": "Assessment: Comet vs pm plugin — switch/keep + incorporation backlog",
+      "priority": "P1",
+      "status": "archived",
+      "role": "epic",
+      "lane": "decision",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "pm-fix-status-taxonomy-drift",
+      "title": "Fix later/blocked status drift (engine rejects documented statuses) — VERIFIED BUG",
+      "priority": "P1",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "pm-atomic-state-write",
+      "title": "Atomic state.json write (tmp+rename, zero-dep) — corruption safety",
+      "priority": "P1",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "pm-bounded-review-table",
+      "title": "Bounded review-count table (off|standard|thorough) in CLAUDE.md rules — from Comet review_mode",
+      "priority": "P2",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "pm-optional-gate-guard-hook",
+      "title": "Optional opt-in PreToolUse guard hook: block source writes before reconcile gate on detour POP",
+      "priority": "P2",
+      "status": "planned",
+      "role": "epic",
+      "lane": "superpowers",
+      "links": [],
+      "reconcileNeeded": false
+    },
+    {
+      "id": "pm-recompute-dont-remember-recovery",
+      "title": "Recompute-don't-remember: re-derive reconcile obligation + active validity from disk on resume",
+      "priority": "P2",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
