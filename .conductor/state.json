@@ -99,7 +99,7 @@
       "id": "pm-fix-status-taxonomy-drift",
       "title": "Fix later/blocked status drift (engine rejects documented statuses) — VERIFIED BUG",
       "priority": "P1",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
