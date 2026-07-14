@@ -139,7 +139,7 @@
       "id": "pm-recompute-dont-remember-recovery",
       "title": "Recompute-don't-remember: re-derive reconcile obligation + active validity from disk on resume",
       "priority": "P2",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
