@@ -129,7 +129,7 @@
       "id": "pm-optional-gate-guard-hook",
       "title": "Optional opt-in PreToolUse guard hook: block source writes before reconcile gate on detour POP",
       "priority": "P2",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "superpowers",
       "links": [],
