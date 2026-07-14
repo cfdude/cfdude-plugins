@@ -175,6 +175,16 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "pm-fix-link-flag-validation-and-update",
+      "title": "add-epic --link accepts malformed format silently; update-epic has no --link flag to fix it",
+      "priority": "P1",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
