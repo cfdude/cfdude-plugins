@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active": "extract-pm-to-own-repo",
+  "active": null,
   "epics": [
     {
       "id": "add-hierarchy-and-tracker-awareness",
@@ -149,7 +149,7 @@
       "id": "extract-pm-to-own-repo",
       "title": "Extract pm plugin into its own repo, reference via git-subdir (like honcho)",
       "priority": "P2",
-      "status": "active",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
