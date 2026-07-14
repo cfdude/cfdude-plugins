@@ -119,7 +119,7 @@
       "id": "pm-bounded-review-table",
       "title": "Bounded review-count table (off|standard|thorough) in CLAUDE.md rules — from Comet review_mode",
       "priority": "P2",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
