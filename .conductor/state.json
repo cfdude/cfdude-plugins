@@ -170,7 +170,7 @@
       "id": "pm-fix-update-epic-title-and-silent-noop",
       "title": "update-epic: add --title flag, reject unknown flags instead of silent no-op",
       "priority": "P1",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
@@ -178,5 +178,5 @@
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.7.0"
+  "pmVersion": "0.8.0"
 }
