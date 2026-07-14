@@ -109,7 +109,7 @@
       "id": "pm-atomic-state-write",
       "title": "Atomic state.json write (tmp+rename, zero-dep) — corruption safety",
       "priority": "P1",
-      "status": "planned",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
