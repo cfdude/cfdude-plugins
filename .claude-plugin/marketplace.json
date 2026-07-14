@@ -18,7 +18,7 @@
         "ref": "feat/project-level-workspace"
       },
       "description": "Persistent memory for Claude Code sessions using Honcho (cfdude fork: project-level .honcho.json workspace override enabling work/personal workspace separation)",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "author": {
         "name": "Plastic Labs",
         "email": "hello@plasticlabs.ai"
