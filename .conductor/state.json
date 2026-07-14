@@ -165,6 +165,16 @@
       "links": [],
       "reconcileNeeded": false,
       "planPath": "docs/superpowers/plans/2026-07-13-epic-level-autonomy.md"
+    },
+    {
+      "id": "pm-fix-update-epic-title-and-silent-noop",
+      "title": "update-epic: add --title flag, reject unknown flags instead of silent no-op",
+      "priority": "P1",
+      "status": "planned",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false
     }
   ],
   "detourStack": [],
