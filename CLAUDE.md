@@ -1,38 +1,21 @@
 # CLAUDE.md
 
 > Project memory for **`cfdude-plugins`** — a public Claude Code plugin marketplace.
-> Current development focus: the **`pm`** plugin (`plugins/pm/`). This repo is itself
-> `pm`-conductor-managed (we dogfood the plugin on its own development).
+> This repo is itself `pm`-conductor-managed (we dogfood the plugin on marketplace-level work).
+> **The `pm` plugin's own code, tests, and engine hard-constraints now live in its own repo,
+> [`cfdude/pm`](https://github.com/cfdude/pm)** — extracted 2026-07-14, preserving full history
+> via `git subtree split`. This repo's `.claude-plugin/marketplace.json` references it via a
+> `github` source (`cfdude/pm`, `ref: main`); there is no `plugins/pm/` directory here anymore.
 
 ## What this repo is
 
-- A marketplace of Claude Code plugins. Each plugin lives under `plugins/<name>/` with its own
-  `.claude-plugin/plugin.json`, `commands/`, `skills/`, `hooks/`, `scripts/`, `agents/`.
+- A marketplace of Claude Code plugins. Each *locally-hosted* plugin lives under
+  `plugins/<name>/` with its own `.claude-plugin/plugin.json`, `commands/`, `skills/`, `hooks/`,
+  `scripts/`, `agents/`. Some entries (`pm`, `honcho`) instead point at their own external repos
+  via a `github`/`git-subdir` source in `marketplace.json` — the marketplace here only carries
+  the manifest for those, not the code.
 - The active work item is tracked by the conductor in `.conductor/state.json`
   (system of record) and surfaced in `PROJECT.md` (generated — never hand-edit).
-
-## The `pm` engine — hard constraints (must follow)
-
-- **`plugins/pm/scripts/conductor.mjs` is ZERO-DEPENDENCY.** Node 18+ built-ins only
-  (`node:fs`, `node:path`, `node:os`, `node:child_process`, `node:url`). **Never** add an npm
-  package or a `package.json` dependency. If a format needs parsing, prefer JSON (native) over
-  pulling a parser.
-- **Tests:** `node --test plugins/pm/scripts/conductor.test.mjs`. All tests pass before any
-  commit — no exceptions, no `--no-verify`.
-- **Architectural law — the `pm` plugin is an INSTRUCTION layer, never an INTEGRATION layer.**
-  It emits instructions for the interactive Claude agent to act on (the managed `CLAUDE.md`
-  rules block, the SessionStart/PreCompact brief, command-doc markdown). It must **never** open
-  a network connection or call an external system (Jira, GitHub, Linear, …) itself. External
-  tracker sync is the *agent's* job; the engine's only role is to know a tracker is in use and
-  shape the instructions it already emits. No code path in the engine talks to a tracker.
-- **Release discipline.** A feature: (1) bumps `plugins/pm/.claude-plugin/plugin.json`
-  `version`; (2) adds a `CHANGELOG.md` entry; (3) if the `state.json` schema changes, adds a
-  `MIGRATIONS` entry keyed to the new release (additive, idempotent, backward-compatible — a
-  state file written by the prior version must still load). `state.json` carries `pmVersion`.
-  The user-facing update sequence is: update the plugin → `/reload-plugins` (or restart) →
-  `/pm:upgrade` per repo.
-- Engine subcommands are dispatched at the bottom of `conductor.mjs`; every new subcommand needs
-  a matching command doc under `plugins/pm/commands/` and coverage in `conductor.test.mjs`.
 
 ## Four-system coordination (in this repo)
 
@@ -82,4 +65,31 @@ plan, or a manual list). Follow these rules:
    as ordered backlog in `PROJECT.md` and a `planned: N` count in the briefing, without a
    "no change on disk" warning; `/pm:sync` flips an openspec planned epic to untriaged once
    its change is proposed. Have a roadmap doc? Read it in-session and load each item this way.
+
+## Epic-level autonomy
+
+An epic's `autonomy` block (`.conductor/state.json`) can grant it broad execution trust —
+`level: "off"` by default (today's behavior, unchanged). Setting `level: "autonomous"`
+removes the need to ask before each phase transition, but NEVER removes a genuine safety stop.
+This is development-time only — it never covers actions with irreversible EXTERNAL side
+effects (sending email/Slack, deploying to production, third-party API calls, pushing to a
+shared branch); those are out of scope regardless of autonomy level.
+
+1. **Preflight before flipping the switch** — see the `conductor` skill's
+   "Epic-level autonomy — the preflight scan" section for the full process. In short: read
+   the epic's full source, produce a short batch of destructive-risk-points +
+   genuine-unknowns questions, get the user's answers, THEN record them:
+   `set-autonomy <id> --preauthorize "<action>:<reason>"` / `--context "<note>"`, and only
+   then `set-autonomy <id> --level autonomous`.
+2. **Execution-time decision rule** — check every destructive action against these, in
+   order, before treating it as a stop:
+   a. Already pre-authorized in the preflight? → proceed, record via `--notify`.
+   b. No backup/restore path exists? → STOP regardless of autonomy level.
+   c. Destructive but restorable (backed up first)? → WARN — log it, proceed.
+   d. No context to act on? → STOP — a real gap, not a false stall.
+   e. Consequential and not yet notified? → record it for the end-of-epic report.
+3. **End-of-epic report** — on completion, report what was asked, what was done, decisions
+   made in the user's absence (the WARN-class log), and an explicit "are you OK with
+   these?" checkpoint, THEN run tests. Leave room to iterate — including rewriting code —
+   if the user is not satisfied.
 <!-- END pm-conductor rules -->
