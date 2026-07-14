@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active": null,
+  "active": "epic-level-autonomy",
   "epics": [
     {
       "id": "add-hierarchy-and-tracker-awareness",
@@ -159,7 +159,7 @@
       "id": "epic-level-autonomy",
       "title": "pm 0.8.0 — epic-level autonomy contract",
       "priority": "P1",
-      "status": "queued",
+      "status": "active",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
