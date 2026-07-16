@@ -6,12 +6,18 @@ name: Security
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]        # post-merge baseline on the protected branch
   pull_request:
-    branches: [main, dev]
+    branches: [main, dev]   # gate every PR (this is where scans block merges)
   workflow_dispatch:
   schedule:
     - cron: '0 6 * * 1'  # Mondays 06:00 UTC — catch newly-disclosed CVEs
+
+# One scan per ref; cancel superseded runs so PR updates don't pile up or collide
+# on SARIF upload.
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
