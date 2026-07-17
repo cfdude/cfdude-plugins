@@ -1,0 +1,39 @@
+name: Security
+
+# Scans code on every push to main/dev and on every PR targeting them, plus a
+# weekly baseline. Delegates to the shared reusable workflows in cfdude/.github so
+# scanning stays consistent across repos and is maintained in one place.
+
+on:
+  push:
+    branches: [main]        # post-merge baseline on the protected branch
+  pull_request:
+    branches: [main, dev]   # gate every PR (this is where scans block merges)
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'  # Mondays 06:00 UTC — catch newly-disclosed CVEs
+
+# One scan per ref; cancel superseded runs so PR updates don't pile up or collide
+# on SARIF upload.
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  semgrep:
+    name: Semgrep SAST
+    uses: cfdude/.github/.github/workflows/security-semgrep.yml@main
+    permissions:
+      contents: read
+      security-events: write
+
+  trivy:
+    name: Trivy FS scan
+    uses: cfdude/.github/.github/workflows/security-trivy.yml@main
+    permissions:
+      contents: read
+      security-events: write
