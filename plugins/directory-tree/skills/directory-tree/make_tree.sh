@@ -95,9 +95,14 @@ make_tree() {
 		return 1
 	fi
 
-	# --- Ensure directory_tree.md is itself gitignored ------------------------
+	# --- Ensure directory_tree.md is gitignored -------------------------------
 	# It's generated output and can be large; keep it out of version control.
-	if ! { [[ -f "$gitignore_file" ]] && grep -qxF "$fileName" "$gitignore_file"; }; then
+	# Skip the per-repo entry when it's ALREADY ignored by any mechanism — a
+	# global core.excludesfile, .git/info/exclude, or an existing .gitignore
+	# line — so a globally-ignored setup never accrues redundant per-repo lines.
+	# (`git check-ignore` fails outside a git repo, so the CWD-fallback path
+	# still creates a local .gitignore.)
+	if ! git check-ignore -q "$fileName" 2>/dev/null; then
 		# add a separating newline only if the file exists and lacks a trailing one
 		if [[ -s "$gitignore_file" && -n "$(tail -c1 "$gitignore_file")" ]]; then
 			echo >> "$gitignore_file"
