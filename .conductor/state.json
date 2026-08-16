@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active": "directory-tree-fix-make-tree",
+  "active": null,
   "epics": [
     {
       "id": "add-hierarchy-and-tracker-awareness",
@@ -180,7 +180,7 @@
       "id": "directory-tree-fix-make-tree",
       "title": "directory-tree: fix make_tree.sh (root-anchor, gitignore globs, mktemp, self-gitignore, basename -I) + consolidate 26 scattered copies",
       "priority": "P2",
-      "status": "active",
+      "status": "archived",
       "role": "epic",
       "lane": "claude-code",
       "links": [],
@@ -221,7 +221,8 @@
       ],
       "externalId": "cfdude/cfdude-plugins#14",
       "externalUrl": "https://github.com/cfdude/cfdude-plugins/issues/14",
-      "startedAt": "2026-08-16T22:35:27.165Z"
+      "startedAt": "2026-08-16T22:35:27.165Z",
+      "completedAt": "2026-08-16T22:53:16.855Z"
     }
   ],
   "detourStack": [],
