@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "active": null,
+  "active": "directory-tree-fix-make-tree",
   "epics": [
     {
       "id": "add-hierarchy-and-tracker-awareness",
@@ -175,8 +175,56 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false
+    },
+    {
+      "id": "directory-tree-fix-make-tree",
+      "title": "directory-tree: fix make_tree.sh (root-anchor, gitignore globs, mktemp, self-gitignore, basename -I) + consolidate 26 scattered copies",
+      "priority": "P2",
+      "status": "active",
+      "role": "epic",
+      "lane": "claude-code",
+      "links": [],
+      "reconcileNeeded": false,
+      "stories": [
+        {
+          "title": "Defect 1: anchor to git root — resolve 'git rev-parse --show-toplevel' and write directory_tree.md there, so invoking from a subdir still produces the repo-root tree at the root",
+          "done": true
+        },
+        {
+          "title": "Defect 2: honor .gitignore glob lines (*.log, *.pyc, etc.) — tree -I supports fnmatch, stop dropping globbed patterns at the parser elif",
+          "done": true
+        },
+        {
+          "title": "Defect 3: use mktemp for the markdown-fence prepend — eliminate the stray 'temp' file left in repo root on mid-write failure",
+          "done": true
+        },
+        {
+          "title": "Defect 4: self-add directory_tree.md to .gitignore if missing (generated output, can be large; Rob requires it gitignored)",
+          "done": true
+        },
+        {
+          "title": "Defect 5: basename-extract for tree -I (docs/build/ -> build). Today slash-tokens match no basename = silent no-op. CHANGELOG MUST flag this CHANGES BEHAVIOR: previously-inert entries start excluding (smaller trees are the entry finally working, not a regression)",
+          "done": true
+        },
+        {
+          "title": "Merge market-intelligence's longer core exclude_list into the structure: node_modules, dist, build, .next, target, coverage, *.egg-info, __pycache__, .pytest_cache, .ruff_cache, venv, .venv, settings.local.json, directory_tree.md (self)",
+          "done": true
+        },
+        {
+          "title": "Preserve (do NOT regress): --include/-i flag; .gitignore-independent exclusions; markdown-fenced output; keep ${CLAUDE_PLUGIN_ROOT} (not CLAUDE_SKILL_DIR); keep triggers in description (no when_to_use key — not strict-spec-valid for a marketplace plugin); scope Bash(${CLAUDE_PLUGIN_ROOT}/.../make_tree.sh:*) in allowed-tools instead of blanket Bash",
+          "done": true
+        },
+        {
+          "title": "Post-publish (Rob's manual steps, not this epic): enable directory-tree@cfdude-plugins in ~/.claude/settings.json, then delete the 26 scattered make_tree.sh copies",
+          "done": false
+        }
+      ],
+      "externalId": "cfdude/cfdude-plugins#14",
+      "externalUrl": "https://github.com/cfdude/cfdude-plugins/issues/14",
+      "startedAt": "2026-08-16T22:35:27.165Z"
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.23.1"
+  "pmVersion": "0.25.0",
+  "platform": "claude-code"
 }
