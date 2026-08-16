@@ -23,7 +23,7 @@ Then install any plugin from it:
 |--------|---------|--------------|
 | [`honcho`](https://github.com/cfdude/claude-honcho) | 0.2.7 | Persistent, cross-session memory for Claude Code backed by [Honcho](https://honcho.dev). This cfdude fork adds a project-level `.honcho.json` workspace override, enabling clean work/personal workspace separation. Lives in its own repo, referenced here via a `git-subdir` source. |
 | [`pm`](https://github.com/cfdude/pm) | 0.9.3 | A project-management conductor above OpenSpec and Superpowers — tracks proposals as epics, maintains an explicit detour stack, and enforces a reconcile gate so nothing is lost when work pivots or context is compacted. Lives in its own repo, referenced here via a `github` source. |
-| [`directory-tree`](plugins/directory-tree) | 1.1.0 | Generates and optimizes `directory_tree.md` with a `.gitignore`-aware tree script, plus `--include` overrides and `.gitignore` improvement suggestions. |
+| [`directory-tree`](plugins/directory-tree) | 1.2.0 | Generates and optimizes `directory_tree.md` (written at the git repo root) with a `.gitignore`-aware tree script — honors glob patterns, self-gitignores the output, plus `--include` overrides and `.gitignore` improvement suggestions. |
 
 ## Repository layout
 

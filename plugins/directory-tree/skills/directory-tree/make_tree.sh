@@ -2,17 +2,19 @@
 
 make_tree() {
 	local fileName='directory_tree.md'
-	local gitignore_file='.gitignore'
 
+	# --- Parse args -----------------------------------------------------------
 	local -a include_overrides=()
 	while [[ $# -gt 0 ]]; do
 		case $1 in
 			--include|-i)
 				shift
-				[[ -n "$1" ]] && include_overrides+=(${(s:,:)1})
+				[[ -n "${1:-}" ]] && include_overrides+=(${(s:,:)1})
 				;;
 			--help|-h)
-				echo "Usage: $0 [--include name1,name2,...]"
+				echo "Usage: make_tree.sh [--include name1,name2,...]"
+				echo "  Writes a fenced directory_tree.md at the git repo root."
+				echo "  --include re-adds names the exclusion set would otherwise hide."
 				return 0
 				;;
 			*)
@@ -23,25 +25,52 @@ make_tree() {
 		shift
 	done
 
-	# Build exclude pattern from .gitignore entries plus core exclusions
-	local -a exclude_list=(.git .DS_Store)
+	# --- Anchor at the repo root ---------------------------------------------
+	# Run from a subdirectory and the tree still lands at the project root, not
+	# wherever the skill happened to be invoked. Falls back to the current dir
+	# when this isn't a git repo.
+	local root
+	root=$(git rev-parse --show-toplevel 2>/dev/null)
+	if [[ -n "$root" ]]; then
+		cd "$root" || { echo "cannot cd to repo root: $root" >&2; return 1; }
+	fi
+	local gitignore_file='.gitignore'
+
+	# --- Build the exclusion set: core + derived from .gitignore --------------
+	# NOTE: `tree -I` matches BASENAMES, not paths, and supports fnmatch globs.
+	# So every pattern is reduced to its final path segment, and a .gitignore
+	# entry like `docs/build/` excludes anything named `build` anywhere in the
+	# tree — an intentional over-match, the closest `tree -I` can get.
+	local -a exclude_list=(
+		.git .DS_Store "$fileName"
+		node_modules dist build .next out target coverage
+		__pycache__ .pytest_cache .ruff_cache .mypy_cache
+		venv .venv env
+		'*.egg-info' settings.local.json
+	)
 	if [[ -f "$gitignore_file" ]]; then
+		local line
 		while IFS= read -r line || [[ -n "$line" ]]; do
-			[[ -z "$line" || "$line" == \#* || "$line" == !* ]] && continue
-			line=${line%%#*}
-			line=${line%%[[:space:]]*}
-			line=${line#./}
-			line=${line#/}
+			line=${line%%#*}                 # drop comments (inline or whole-line)
+			line=${line//[[:space:]]/}       # strip whitespace (patterns carry none)
 			[[ -z "$line" ]] && continue
-			if [[ "$line" == */ ]]; then
-				exclude_list+="${line%/}"
-			elif [[ "$line" != *\** && "$line" != *\?* && "$line" != *\[* && "$line" != *\]* && "$line" != *\{* && "$line" != *\}* && "$line" != *\\* ]]; then
-				exclude_list+="$line"
-			fi
+			[[ "$line" == '!'* ]] && continue   # negations: unsupported by `tree -I`
+			line=${line%/}                   # trailing slash = directory marker
+			line=${line#/}                   # leading slash = root anchor (tree can't anchor)
+			# strip trailing /* or /** wildcard segments BEFORE basename reduction — else
+			# `build/**` or `**/.terraform/*` would collapse to a bare `*`/`**` that matches
+			# every basename and excludes the entire tree.
+			while [[ "$line" == */'*' || "$line" == */'**' ]]; do line=${line%/*}; done
+			line=${line##*/}                 # basename only — `tree -I` matches names
+			[[ -z "$line" ]] && continue
+			[[ "$line" == '*' || "$line" == '**' ]] && continue   # never emit a match-everything pattern
+			exclude_list+="$line"            # globs (*.log, *.pyc) pass straight through
 		done < "$gitignore_file"
 	fi
 
+	# --- Dedupe, then honor --include overrides -------------------------------
 	local -a unique_excludes=(${(u)exclude_list})
+	local inc
 	for inc in ${include_overrides[@]}; do
 		unique_excludes=(${unique_excludes:#$inc})
 	done
@@ -49,14 +78,34 @@ make_tree() {
 	local -a tree_ignore_args=()
 	[[ -n "$excludeDirs" ]] && tree_ignore_args=(-I "$excludeDirs")
 
-	# Create the tree output (exclude patterns derived from .gitignore)
-	tree -a -L 10 ${tree_ignore_args[@]} --dirsfirst -sD --timefmt "%Y-%m-%d" -o "$fileName"
+	# --- Generate the tree ----------------------------------------------------
+	if ! tree -a -L 10 ${tree_ignore_args[@]} --dirsfirst -sD --timefmt "%Y-%m-%d" -o "$fileName"; then
+		echo "tree failed (is it installed? try 'brew install tree')" >&2
+		return 1
+	fi
 
-	# Add markdown formatting
-	echo "\`\`\`bash" | cat - "$fileName" > temp && mv temp "$fileName"
-	echo "\`\`\`" >> "$fileName"
+	# --- Wrap in a fenced code block (mktemp: no stray 'temp' left behind) -----
+	local tmp
+	tmp=$(mktemp "${TMPDIR:-/tmp}/make_tree.XXXXXX") || { echo "mktemp failed" >&2; return 1; }
+	if { echo '```bash'; cat "$fileName"; echo '```'; } > "$tmp" && mv "$tmp" "$fileName"; then
+		:
+	else
+		rm -f "$tmp"
+		echo "failed to wrap tree output" >&2
+		return 1
+	fi
 
-	echo "Directory tree created as $fileName"
+	# --- Ensure directory_tree.md is itself gitignored ------------------------
+	# It's generated output and can be large; keep it out of version control.
+	if ! { [[ -f "$gitignore_file" ]] && grep -qxF "$fileName" "$gitignore_file"; }; then
+		# add a separating newline only if the file exists and lacks a trailing one
+		if [[ -s "$gitignore_file" && -n "$(tail -c1 "$gitignore_file")" ]]; then
+			echo >> "$gitignore_file"
+		fi
+		{ echo "# generated by the directory-tree plugin"; echo "$fileName"; } >> "$gitignore_file"
+	fi
+
+	echo "Directory tree created as $PWD/$fileName"
 }
 
 make_tree "$@"

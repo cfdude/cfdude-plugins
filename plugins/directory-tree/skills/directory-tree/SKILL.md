@@ -1,7 +1,7 @@
 ---
 name: directory-tree
-description: Generate and optimize the directory_tree.md file by running the bundled make_tree.sh script and analyzing results to suggest .gitignore improvements. Use when the user mentions directory tree, make_tree.sh, updating .gitignore, or when directory_tree.md is too large (>500 lines).
-allowed-tools: Read, Edit, Bash, Grep, Glob
+description: Generate and optimize the directory_tree.md file (always written at the git repo root) by running the bundled make_tree.sh script and analyzing results to suggest .gitignore improvements. Use when the user mentions directory tree, make_tree.sh, regenerate the tree, "what's the structure here", updating .gitignore, or when directory_tree.md is too large (>500 lines).
+allowed-tools: Read, Edit, Grep, Glob, Bash(${CLAUDE_PLUGIN_ROOT}/skills/directory-tree/make_tree.sh:*), Bash(wc:*), Bash(head:*), Bash(cat:*), Bash(fd:*)
 ---
 
 # Directory Tree
@@ -22,10 +22,26 @@ This skill generates and keeps a clean, manageable `directory_tree.md` file by:
 
 ## The Bundled Script
 
-The script lives at `${CLAUDE_PLUGIN_ROOT}/skills/directory-tree/make_tree.sh` and runs against
-the current working directory. It derives its exclude list from the project's `.gitignore`
-(directory entries and literal paths; glob/negation lines are skipped) plus core exclusions
-(`.git`, `.DS_Store`), then writes a fenced markdown tree to `directory_tree.md`.
+The script lives at `${CLAUDE_PLUGIN_ROOT}/skills/directory-tree/make_tree.sh`. It **anchors at
+the git repo root** (`git rev-parse --show-toplevel`) — invoke it from any subdirectory and the
+tree still lands as `directory_tree.md` at the project root (falling back to the current directory
+when not in a git repo). It derives its exclude list from the project's `.gitignore` plus a core
+set — `.git`, `.DS_Store`, `directory_tree.md` (itself), `node_modules`, `dist`, `build`,
+`.next`, `out`, `target`, `coverage`, `__pycache__`, `.pytest_cache`, `.ruff_cache`,
+`.mypy_cache`, `venv`, `.venv`, `env`, `*.egg-info`, and `settings.local.json` — then writes a
+fenced markdown tree. (Because `-I` matches basenames, `settings.local.json` hides
+`.claude/settings.local.json` in every Claude-Code-managed repo — intended.)
+
+Two behaviors worth knowing:
+
+- **`tree -I` matches basenames, not paths**, so every `.gitignore` pattern is reduced to its
+  final path segment. A directory entry like `docs/build/` therefore excludes anything named
+  `build` *anywhere* in the tree — the closest `tree -I` can get to a path-qualified ignore.
+  (Glob patterns such as `*.log` and `*.pyc` **are** honored — `tree -I` does fnmatch. Negation
+  lines like `!keep` are skipped, since `-I` can't express them.)
+- **The script ensures `directory_tree.md` is gitignored** — it appends the entry to `.gitignore`
+  (creating the file if absent) when it's missing, since the generated tree is not meant to be
+  version-controlled.
 
 It accepts CLI flags:
 
@@ -190,17 +206,20 @@ If `tree` is not installed:
 - Suggest `brew install tree` (macOS) or the platform equivalent
 
 If .gitignore doesn't exist:
-- Ask the user if they want to create one before proceeding
+- The script creates one automatically to add the `directory_tree.md` entry (the generated tree
+  must not be version-controlled). This is intentional and needs no confirmation — mention it to
+  the user afterward if the repo had no `.gitignore` before.
 
 If directory_tree.md shows no improvement after changes:
 - Verify the patterns were added correctly to .gitignore
-- Check if .gitignore patterns are using correct syntax (the script only honors literal
-  directory/file entries, not glob or negation lines)
+- Remember the script matches on **basenames**: a path-qualified entry (`docs/build/`) excludes
+  every `build` in the tree, and a negation line (`!keep`) is ignored entirely
+- Glob patterns (`*.log`, `*.pyc`) are honored, so prefer them over enumerating files
 - Suggest alternative patterns or consider `--include`/exclusion adjustments
 
 ## Plugin Information
 
 This skill is part of the **directory-tree** plugin.
 - Script location: `${CLAUDE_PLUGIN_ROOT}/skills/directory-tree/make_tree.sh`
-- Operates on the current working directory
+- Anchors at the git repo root (falls back to the current directory outside a repo)
 - Compatible with any project structure
