@@ -19,6 +19,7 @@ cd "$WORK" || exit 2
 
 git init -q
 git config user.email t@t.t; git config user.name t
+git config core.excludesfile /dev/null   # isolate from the machine's global gitignore
 mkdir -p src docs/build nested/deep keepme
 print -r -- 'build/'            >  .gitignore   # bare dir name
 print -r -- 'docs/build/'       >> .gitignore   # path-qualified dir (defect 5)
@@ -90,6 +91,22 @@ fi
 rm -f "$ROOT_TREE"
 ( cd "$WORK" && zsh "$SCRIPT" --include build >/dev/null 2>&1 )
 [[ -f "$ROOT_TREE" ]] && { has "$ROOT_TREE" 'artifact.o' && ok "include: --include build re-included it" || bad "include: build still excluded"; }
+
+# --- Global-ignore awareness: when directory_tree.md is already ignored by a
+#     global core.excludesfile, the script must NOT add a redundant per-repo line ---
+GWORK=$(mktemp -d)
+GEXCL=$(mktemp)
+print -r -- 'directory_tree.md' > "$GEXCL"
+( cd "$GWORK" && git init -q && git config user.email t@t.t && git config user.name t \
+    && git config core.excludesfile "$GEXCL" && : > file.txt \
+    && zsh "$SCRIPT" >/dev/null 2>&1 )
+if [[ -f "$GWORK/.gitignore" ]] && grep -qF 'directory_tree.md' "$GWORK/.gitignore"; then
+  bad "global-aware: redundantly added directory_tree.md despite global ignore"
+else
+  ok "global-aware: skipped per-repo entry (already globally ignored)"
+fi
+[[ -f "$GWORK/directory_tree.md" ]] && ok "global-aware: tree still generated" || bad "global-aware: no tree produced"
+rm -rf "$GWORK" "$GEXCL"
 
 print -r -- ""
 print -r -- "RESULT: $PASS passed, $FAIL failed"

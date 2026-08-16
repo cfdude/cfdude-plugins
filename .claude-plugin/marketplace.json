@@ -59,7 +59,7 @@
       "name": "directory-tree",
       "source": "./plugins/directory-tree",
       "description": "Generate and optimize a project's directory_tree.md by running a bundled, .gitignore-aware tree script and suggesting .gitignore improvements to keep the tree small.",
-      "version": "1.2.0",
+      "version": "1.2.1",
       "author": {
         "name": "Rob Sherman",
         "email": "rsherman@velocityinteractive.com"
