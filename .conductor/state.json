@@ -178,5 +178,6 @@
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.23.1"
+  "pmVersion": "0.25.0",
+  "platform": "claude-code"
 }

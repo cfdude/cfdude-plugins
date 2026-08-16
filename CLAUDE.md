@@ -36,7 +36,7 @@ Conventional commits (`feat|fix|docs|test|chore|refactor`), scoped to the plugin
 (e.g. `feat(pm): …`). This repo is **not** Jira-tracked, so no issue-key prefix. Never
 `git commit --no-verify`.
 
-<!-- BEGIN pm-conductor rules (managed by /pm:init — safe to delete this block) -->
+<!-- BEGIN pm-conductor rules (managed by pm — safe to delete this block) -->
 ## PM Conductor — operating rules
 
 This repo is managed by the `pm` plugin. The conductor sits ABOVE OpenSpec and Superpowers.
