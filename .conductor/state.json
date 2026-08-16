@@ -218,7 +218,9 @@
           "title": "Post-publish (Rob's manual steps, not this epic): enable directory-tree@cfdude-plugins in ~/.claude/settings.json, then delete the 26 scattered make_tree.sh copies",
           "done": false
         }
-      ]
+      ],
+      "externalId": "cfdude/cfdude-plugins#14",
+      "externalUrl": "https://github.com/cfdude/cfdude-plugins/issues/14"
     }
   ],
   "detourStack": [],
