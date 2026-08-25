@@ -15,7 +15,7 @@
         "source": "git-subdir",
         "url": "https://github.com/cfdude/claude-honcho",
         "path": "plugins/honcho",
-        "ref": "release/current"
+        "ref": "main"
       },
       "description": "Persistent memory for Claude Code sessions using Honcho (cfdude fork: project-level .honcho.json workspace override enabling work/personal workspace separation)",
       "version": "0.8.0",
