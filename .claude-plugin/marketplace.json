@@ -15,10 +15,10 @@
         "source": "git-subdir",
         "url": "https://github.com/cfdude/claude-honcho",
         "path": "plugins/honcho",
-        "ref": "feat/project-level-workspace"
+        "ref": "release/current"
       },
       "description": "Persistent memory for Claude Code sessions using Honcho (cfdude fork: project-level .honcho.json workspace override enabling work/personal workspace separation)",
-      "version": "0.7.0",
+      "version": "0.8.0",
       "author": {
         "name": "Plastic Labs",
         "email": "hello@plasticlabs.ai"
