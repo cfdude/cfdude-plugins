@@ -1,0 +1,20 @@
+{
+  "name": "cross-session-messaging",
+  "version": "1.0.0",
+  "description": "Mechanics for messaging another running Claude Code session: addressing, why success:true is not delivery, permission-class partitioning, the session registry, and a trust-boundary template so one project's session can't quietly reach another's.",
+  "author": {
+    "name": "Rob Sherman",
+    "email": "rsherman@velocityinteractive.com"
+  },
+  "homepage": "https://github.com/cfdude/cfdude-plugins",
+  "repository": "https://github.com/cfdude/cfdude-plugins",
+  "license": "MIT",
+  "keywords": [
+    "cross-session-messaging",
+    "sendmessage",
+    "listagents",
+    "governance",
+    "trust-boundary",
+    "permissions"
+  ]
+}
