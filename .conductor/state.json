@@ -10,7 +10,12 @@
       "role": "epic",
       "lane": "openspec",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "2026-06-18-pm-0.4.0",
@@ -21,7 +26,12 @@
       "lane": "superpowers",
       "planPath": "docs/superpowers/plans/2026-06-18-pm-0.4.0.md",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "2026-06-18-pm-0.4.1",
@@ -32,7 +42,12 @@
       "lane": "superpowers",
       "planPath": "docs/superpowers/plans/2026-06-18-pm-0.4.1.md",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "2026-06-18-pm-lane-agnostic-epics",
@@ -43,7 +58,12 @@
       "lane": "superpowers",
       "planPath": "docs/superpowers/plans/2026-06-18-pm-lane-agnostic-epics.md",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "patch-0.5.1-migration-order-and-detection",
@@ -53,7 +73,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "feat-0.6.0-knowledge-surfacing",
@@ -63,7 +88,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "fix-0.6.1-archive-detection",
@@ -73,7 +103,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "feat-0.7.0-set-active-and-resolver",
@@ -83,7 +118,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "assess-comet-vs-pm",
@@ -93,7 +133,12 @@
       "role": "epic",
       "lane": "decision",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-fix-status-taxonomy-drift",
@@ -103,7 +148,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-atomic-state-write",
@@ -113,7 +163,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-bounded-review-table",
@@ -123,7 +178,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-optional-gate-guard-hook",
@@ -133,7 +193,12 @@
       "role": "epic",
       "lane": "superpowers",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-recompute-dont-remember-recovery",
@@ -143,7 +208,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "extract-pm-to-own-repo",
@@ -153,7 +223,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "epic-level-autonomy",
@@ -164,7 +239,12 @@
       "lane": "claude-code",
       "links": [],
       "reconcileNeeded": false,
-      "planPath": "docs/superpowers/plans/2026-07-13-epic-level-autonomy.md"
+      "planPath": "docs/superpowers/plans/2026-07-13-epic-level-autonomy.md",
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "pm-fix-update-epic-title-and-silent-noop",
@@ -174,7 +254,12 @@
       "role": "epic",
       "lane": "claude-code",
       "links": [],
-      "reconcileNeeded": false
+      "reconcileNeeded": false,
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-09-06T19:55:13.443Z",
+        "recordedBy": "migration"
+      }
     },
     {
       "id": "directory-tree-fix-make-tree",
@@ -222,10 +307,16 @@
       "externalId": "cfdude/cfdude-plugins#14",
       "externalUrl": "https://github.com/cfdude/cfdude-plugins/issues/14",
       "startedAt": "2026-08-16T22:35:27.165Z",
-      "completedAt": "2026-08-16T22:53:16.855Z"
+      "completedAt": "2026-08-16T22:53:16.855Z",
+      "disposition": {
+        "outcome": "unknown",
+        "recordedAt": "2026-08-16T22:53:16.855Z",
+        "recordedBy": "migration"
+      }
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.25.0",
-  "platform": "claude-code"
+  "pmVersion": "0.39.0",
+  "platform": "claude-code",
+  "revision": 1
 }
