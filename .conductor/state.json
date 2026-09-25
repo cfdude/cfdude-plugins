@@ -334,7 +334,7 @@
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.48.0",
+  "pmVersion": "0.49.0",
   "platform": "claude-code",
-  "revision": 10
+  "revision": 11
 }
