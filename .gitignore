@@ -15,3 +15,5 @@ node_modules/
 .conductor/state.json.lock*
 .conductor/state.json.tmp*
 .conductor/commit-observe.json*
+.conductor/write-conflicts.log.prev
+.conductor/honcho-memories.log
