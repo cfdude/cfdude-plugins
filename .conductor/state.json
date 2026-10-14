@@ -15,7 +15,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T00:11:20-07:00"
     },
     {
       "id": "2026-06-18-pm-0.4.0",
@@ -31,7 +32,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T00:11:20-07:00"
     },
     {
       "id": "2026-06-18-pm-0.4.1",
@@ -47,7 +49,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T00:11:20-07:00"
     },
     {
       "id": "2026-06-18-pm-lane-agnostic-epics",
@@ -63,7 +66,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T00:11:20-07:00"
     },
     {
       "id": "patch-0.5.1-migration-order-and-detection",
@@ -78,7 +82,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T18:55:35-07:00"
     },
     {
       "id": "feat-0.6.0-knowledge-surfacing",
@@ -93,7 +98,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-25T20:41:02-07:00"
     },
     {
       "id": "fix-0.6.1-archive-detection",
@@ -108,7 +114,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-06-26T17:00:12-07:00"
     },
     {
       "id": "feat-0.7.0-set-active-and-resolver",
@@ -123,7 +130,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-08T16:25:13-07:00"
     },
     {
       "id": "assess-comet-vs-pm",
@@ -138,7 +146,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "pm-fix-status-taxonomy-drift",
@@ -153,7 +162,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "pm-atomic-state-write",
@@ -168,7 +178,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "pm-bounded-review-table",
@@ -183,7 +194,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "pm-optional-gate-guard-hook",
@@ -198,7 +210,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "pm-recompute-dont-remember-recovery",
@@ -213,7 +226,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T08:11:49-07:00"
     },
     {
       "id": "extract-pm-to-own-repo",
@@ -228,7 +242,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T12:53:51-07:00"
     },
     {
       "id": "epic-level-autonomy",
@@ -244,7 +259,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T13:45:40-07:00"
     },
     {
       "id": "pm-fix-update-epic-title-and-silent-noop",
@@ -259,7 +275,8 @@
         "outcome": "unknown",
         "recordedAt": "2026-09-06T19:55:13.443Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-07-13T21:22:32-07:00"
     },
     {
       "id": "directory-tree-fix-make-tree",
@@ -312,11 +329,12 @@
         "outcome": "unknown",
         "recordedAt": "2026-08-16T22:53:16.855Z",
         "recordedBy": "migration"
-      }
+      },
+      "createdAt": "2026-08-16T15:31:34-07:00"
     }
   ],
   "detourStack": [],
-  "pmVersion": "0.39.0",
+  "pmVersion": "0.52.0",
   "platform": "claude-code",
-  "revision": 1
+  "revision": 14
 }
