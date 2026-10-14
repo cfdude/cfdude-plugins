@@ -90,6 +90,16 @@
         "permissions"
       ],
       "category": "developer-tools"
+    },
+    {
+      "name": "snowflake-cortex-code",
+      "description": "Fork of Snowflake Cortex Code plugin with the Snowflake MCP conflict check disabled by default (CORTEX_MCP_CONFLICT_CHECK=on restores it). Tracks Snowflake-Labs/snowflake-ai-kit.",
+      "source": {
+        "source": "git-subdir",
+        "url": "https://github.com/cfdude/snowflake-ai-kit",
+        "path": "plugins/cortex-code",
+        "ref": "main"
+      }
     }
   ]
 }
